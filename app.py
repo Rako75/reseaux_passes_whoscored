@@ -430,117 +430,287 @@ class PassNetworkEngine:
         return pd.DataFrame(network), avg_locs
 
 class DashboardVisualizer:
-    """Gère le tracé Matplotlib."""
+    """Gère le rendu graphique - Version exacte du pipeline"""
+
     def create_dashboard(self, match_info, teams, home_net, home_nodes, away_net, away_nodes, home_logo_url, away_logo_url):
+        """Méthode principale - Adapte les paramètres pour draw_dashboard"""
+        
+        # Récupération des images de logos depuis les URLs
+        home_logo_img = self._get_logo_from_url(home_logo_url)
+        away_logo_img = self._get_logo_from_url(away_logo_url)
+        
+        # Stats vides (non utilisées dans ce contexte Streamlit)
+        stats = {'home': {}, 'away': {}}
+        
+        # Appel de la méthode de dessin principale
+        return self.draw_dashboard(
+            match_info, teams, stats,
+            home_net, home_nodes,
+            away_net, away_nodes,
+            home_logo_img, away_logo_img,
+            output_file=None  # Pas de sauvegarde, on retourne la figure
+        )
+    
+    def _get_logo_from_url(self, url):
+        """Télécharge et retourne l'image PIL depuis une URL"""
+        if not url:
+            return None
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            resp = requests.get(url, headers=headers, stream=True, timeout=5)
+            if resp.status_code == 200:
+                img = Image.open(BytesIO(resp.content))
+                return img
+        except:
+            return None
+        return None
+
+    def draw_dashboard(self, match_info, teams, stats,
+                       home_net, home_nodes,
+                       away_net, away_nodes,
+                       home_logo_img, away_logo_img,
+                       output_file=None):
+        """Méthode de dessin principale - CODE EXACT DU PIPELINE"""
+
         STYLE = {
-            'background': '#0E1117', 'text': 'white', 'sub': '#A0A0A0',
-            'home': '#00BFFF', 'away': '#FF4B4B', 'line': '#2B313E'
+            'background': '#0E1117',
+            'text_color': '#FFFFFF',
+            'sub_text': '#A0A0A0',
+            'home_color': '#00BFFF',
+            'away_color': '#FF4B4B',
+            'line_color': '#2B313E',
+            'font_prop': FONT_PROP,
+            'legend_blue': '#5DADEC'
         }
-        
+
+        # Layout: Taille augmentée (24x22)
         fig = plt.figure(figsize=(24, 22), facecolor=STYLE['background'])
+
+        # GridSpec: 4 Lignes
+        # Width ratios: [1, 0.05, 1] - Colonne centrale (0.05) très fine pour rapprocher les visuels
         gs = gridspec.GridSpec(4, 3, width_ratios=[1, 0.05, 1], height_ratios=[0.08, 0.04, 0.68, 0.20])
+
+        # --- HEADER (Toute la largeur) ---
+        ax_header = fig.add_subplot(gs[0, :])
+        self._draw_header(ax_header, match_info, teams, home_logo_img, away_logo_img, STYLE)
+
+        # --- LÉGENDE (Au-dessus des terrains - Style The Athletic) ---
+        ax_legend = fig.add_subplot(gs[1, :])
+        self._draw_legend(ax_legend, STYLE)
+
+        # --- TERRAIN DOMICILE (Gauche, Vertical) ---
+        ax_home = fig.add_subplot(gs[2, 0])
+        self._draw_pass_map(ax_home, home_net, home_nodes, STYLE['home_color'], STYLE)
+
+        # --- FLÈCHE SENS DU JEU (Centre) ---
+        ax_arrow = fig.add_subplot(gs[2, 1])
+        self._draw_direction_arrow(ax_arrow, STYLE)
+
+        # --- TERRAIN EXTÉRIEUR (Droite, Vertical) ---
+        ax_away = fig.add_subplot(gs[2, 2])
+        self._draw_pass_map(ax_away, away_net, away_nodes, STYLE['away_color'], STYLE, flip=False)
+
+        # --- COMPOSITIONS (Bas - Row 3) ---
+        ax_lineup_home = fig.add_subplot(gs[3, 0])
+        self._draw_lineup(ax_lineup_home, home_nodes, STYLE['home_color'], teams['home']['name'], STYLE)
+
+        ax_lineup_away = fig.add_subplot(gs[3, 2])
+        self._draw_lineup(ax_lineup_away, away_nodes, STYLE['away_color'], teams['away']['name'], STYLE)
+
+        # Footer
+        fig.text(0.5, 0.01, "Données: WhoScored/Opta | Visualisation: Advanced Python Analysis",
+                 ha='center', color=STYLE['sub_text'], fontsize=12, fontproperties=STYLE['font_prop'])
+
+        # Réduction drastique de hspace/wspace pour le rapprochement
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.95, hspace=0.02, wspace=0.02)
         
-        # --- HEADER ---
-        ax_h = fig.add_subplot(gs[0, :])
-        ax_h.axis('off')
+        if output_file:
+            plt.savefig(output_file, facecolor=STYLE['background'], dpi=300, bbox_inches='tight')
+            plt.close(fig)
         
-        score_text = str(match_info.get('score', 'N/A')).replace(' : ', '-')
-        ax_h.text(0.5, 0.5, score_text, ha='center', va='center', fontsize=60, color='white', weight='bold', fontproperties=FONT_PROP)
-        
-        # Date et Lieu
+        return fig
+
+    def _draw_header(self, ax, match_info, teams, home_logo, away_logo, STYLE):
+        ax.axis('off')
+
+        # Logos positionnés via OffsetImage (ZOOM 0.9 pour plus grand)
+        if home_logo:
+            ib_home = OffsetImage(home_logo, zoom=0.9)
+            ab_home = AnnotationBbox(ib_home, (0.10, 0.5), frameon=False, xycoords='axes fraction', box_alignment=(0.5, 0.5))
+            ax.add_artist(ab_home)
+
+        if away_logo:
+            ib_away = OffsetImage(away_logo, zoom=0.9)
+            ab_away = AnnotationBbox(ib_away, (0.90, 0.5), frameon=False, xycoords='axes fraction', box_alignment=(0.5, 0.5))
+            ax.add_artist(ab_away)
+
+        # Info Match
         start_time = match_info.get('startTime', '')
         date_display = start_time[:10] if len(start_time) >= 10 else 'Date inconnue'
-        meta_text = f"{date_display} | {match_info.get('venue', 'Stade')}"
-        ax_h.text(0.5, 0.9, meta_text, ha='center', color=STYLE['sub'], fontsize=14, fontproperties=FONT_PROP)
-        
-        # Noms équipes
-        ax_h.text(0.35, 0.65, teams['home']['name'].upper(), ha='right', fontsize=30, color=STYLE['home'], weight='bold', fontproperties=FONT_PROP)
-        ax_h.text(0.65, 0.65, teams['away']['name'].upper(), ha='left', fontsize=30, color=STYLE['away'], weight='bold', fontproperties=FONT_PROP)
-        
-        # Logos via URL
-        def add_logo(url, x_pos):
-            try:
-                if url:
-                    headers = {'User-Agent': 'Mozilla/5.0'}
-                    resp = requests.get(url, headers=headers, stream=True, timeout=5)
-                    if resp.status_code == 200:
-                        img = Image.open(BytesIO(resp.content))
-                        im = OffsetImage(img, zoom=0.8)
-                        ab = AnnotationBbox(im, (x_pos, 0.5), frameon=False, xycoords='axes fraction')
-                        ax_h.add_artist(ab)
-            except: 
-                pass
-            
-        add_logo(home_logo_url, 0.10)
-        add_logo(away_logo_url, 0.90)
+        date_venue = f"{date_display} | {match_info.get('venue', 'Stade Inconnu')}"
+        ax.text(0.5, 0.90, date_venue, ha='center', va='center', color=STYLE['sub_text'], fontsize=14, fontproperties=STYLE['font_prop'])
 
-        # --- TERRAINS ---
-        def draw_pitch(ax, net, nodes, color):
-            pitch = VerticalPitch(pitch_type='opta', pitch_color=STYLE['background'], line_color=STYLE['line'], linewidth=2)
-            pitch.draw(ax=ax)
-            
-            # Arêtes (Passes)
-            if not net.empty:
-                max_width = net['pass_count'].max()
-                if max_width == 0: max_width = 1
-                width = (net['pass_count'] / max_width * 12)
-                pitch.lines(net['x_start'], net['y_start'], net['x_end'], net['y_end'], lw=width, ax=ax, color=color, alpha=0.5, zorder=2)
-            
-            # Noeuds (Joueurs)
-            if not nodes.empty:
-                max_size = nodes['count'].max()
-                if max_size == 0: max_size = 1
-                sizes = (nodes['count'] / max_size) * 1200
-                pitch.scatter(nodes['x'], nodes['y'], s=sizes, color=STYLE['background'], edgecolors=color, linewidth=2, zorder=3, ax=ax)
-                
-                for _, row in nodes.iterrows():
-                    pitch.annotate(row['shirtNo'], (row['x'], row['y']), va='center', ha='center', color='white', fontsize=11, weight='bold', ax=ax, fontproperties=FONT_PROP)
+        # Score (Position descendue à 0.50)
+        score_txt = str(match_info.get('score', 'N/A')).replace(' : ', '-')
+        ax.text(0.5, 0.50, score_txt, ha='center', va='center', fontsize=65, weight='bold', color='white', fontproperties=STYLE['font_prop'])
+        ax.text(0.5, 0.25, "Score final", ha='center', va='center', fontsize=14, weight='bold', color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
 
-        ax_home = fig.add_subplot(gs[2, 0])
-        draw_pitch(ax_home, home_net, home_nodes, STYLE['home'])
-        
-        ax_away = fig.add_subplot(gs[2, 2])
-        draw_pitch(ax_away, away_net, away_nodes, STYLE['away'])
-        
-        # Flèche sens du jeu
-        ax_arrow = fig.add_subplot(gs[2, 1])
-        ax_arrow.axis('off')
-        ax_arrow.arrow(0.5, 0.1, 0, 0.8, fc='white', ec='white', width=0.05, head_width=0.3, head_length=0.1)
-        ax_arrow.text(0.5, 0.05, "Jeu", ha='center', color='white', fontproperties=FONT_PROP)
-        
-        # --- COMPOSITIONS (Bas) ---
-        def draw_lineup(ax, nodes, color):
-            ax.axis('off')
-            if nodes.empty: return
-            
-            # Tri par numéro
-            nodes = nodes.copy()
-            nodes['shirtNoInt'] = pd.to_numeric(nodes['shirtNo'], errors='coerce').fillna(999).astype(int)
-            lineup = nodes.sort_values('shirtNoInt')
-            
-            half = (len(lineup) + 1) // 2
-            col1 = lineup.iloc[:half]
-            col2 = lineup.iloc[half:]
-            
-            y_pos = 0.95
-            step = 0.12
-            for _, r in col1.iterrows():
-                ax.text(0.1, y_pos, f"{r['shirtNo']} - {r['name']}", color='white', fontsize=13, fontproperties=FONT_PROP)
-                y_pos -= step
-            
-            y_pos = 0.95
-            for _, r in col2.iterrows():
-                ax.text(0.6, y_pos, f"{r['shirtNo']} - {r['name']}", color='white', fontsize=13, fontproperties=FONT_PROP)
-                y_pos -= step
+        # Noms des équipes (Position remontée à 0.65)
+        ax.text(0.35, 0.65, teams['home']['name'].upper(), ha='right', va='center',
+                fontsize=30, weight='bold', color=STYLE['home_color'], fontproperties=STYLE['font_prop'])
+        ax.text(0.65, 0.65, teams['away']['name'].upper(), ha='left', va='center',
+                fontsize=30, weight='bold', color=STYLE['away_color'], fontproperties=STYLE['font_prop'])
 
-        ax_l_home = fig.add_subplot(gs[3, 0])
-        draw_lineup(ax_l_home, home_nodes, STYLE['home'])
-        
-        ax_l_away = fig.add_subplot(gs[3, 2])
-        draw_lineup(ax_l_away, away_nodes, STYLE['away'])
+        # --- AJOUT: Entraîneur et Formation (Position descendue à 0.35) ---
+        home_sub = f"{teams['home'].get('manager', 'N/A')}\n({teams['home'].get('formation', 'N/A')})"
+        away_sub = f"{teams['away'].get('manager', 'N/A')}\n({teams['away'].get('formation', 'N/A')})"
 
-        plt.tight_layout()
-        return fig
+        ax.text(0.35, 0.35, home_sub, ha='right', va='center',
+                fontsize=16, color=STYLE['sub_text'], weight='normal', fontproperties=STYLE['font_prop'])
+        ax.text(0.65, 0.35, away_sub, ha='left', va='center',
+                fontsize=16, color=STYLE['sub_text'], weight='normal', fontproperties=STYLE['font_prop'])
+
+    def _draw_pass_map(self, ax, net_df, nodes_df, color, STYLE, flip=False):
+        # Utilisation de VerticalPitch pour un terrain vertical
+        pitch = VerticalPitch(pitch_type='opta', pitch_color=STYLE['background'],
+                              line_color=STYLE['line_color'], linewidth=1.5)
+        pitch.draw(ax=ax)
+
+        # Copie pour éviter la modification des DataFrames originaux
+        if not net_df.empty:
+            net_df = net_df.copy()
+        if not nodes_df.empty:
+            nodes_df = nodes_df.copy()
+
+        # Plus besoin d'inverser les coordonnées manuellement pour VerticalPitch
+        if flip:
+             net_df['x_start'] = 100 - net_df['x_start']; net_df['y_start'] = 100 - net_df['y_start']
+             net_df['x_end'] = 100 - net_df['x_end']; net_df['y_end'] = 100 - net_df['y_end']
+             nodes_df['x'] = 100 - nodes_df['x']; nodes_df['y'] = 100 - nodes_df['y']
+
+        if not net_df.empty:
+            max_pass = net_df['pass_count'].max()
+            if max_pass > 0:
+                width = (net_df['pass_count'] / max_pass * 12) # Plus épais
+                pitch.lines(net_df['x_start'], net_df['y_start'], net_df['x_end'], net_df['y_end'],
+                            lw=width, ax=ax, color=color, alpha=0.5, zorder=2)
+
+        # Dessiner les noeuds (Uniquement Numéro)
+        if not nodes_df.empty:
+            max_count = nodes_df['count'].max()
+            if max_count > 0:
+                for i, row in nodes_df.iterrows():
+                    size = (row['count'] / max_count) * 1500 # Taille = Volume
+
+                    # Cercle du joueur
+                    pitch.scatter(row['x'], row['y'], s=size, color=STYLE['background'],
+                                  edgecolors=color, linewidth=2, zorder=3, ax=ax)
+
+                    # Numéro uniquement
+                    pitch.annotate(row['shirtNo'], xy=(row['x'], row['y']), va='center', ha='center',
+                                   color='white', fontsize=12, weight='bold', zorder=4, ax=ax, fontproperties=STYLE['font_prop'])
+
+    def _draw_direction_arrow(self, ax, STYLE):
+        """Dessine la flèche 'Sens du jeu' style The Athletic"""
+        ax.axis('off')
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+
+        # Flèche verticale sur toute la hauteur
+        ax.annotate('', xy=(0.7, 0.95), xytext=(0.7, 0.05),
+                    arrowprops=dict(facecolor='white', edgecolor='white', width=1.5, headwidth=8, headlength=10),
+                    xycoords='axes fraction', textcoords='axes fraction')
+
+        # Texte vertical à gauche de la flèche
+        # x=0.3 pour être à gauche de la flèche (qui est à x=0.7)
+        ax.text(0.3, 0.5, "Sens du jeu", rotation=90, ha='center', va='center',
+                color='white', fontsize=14, weight='bold', fontproperties=STYLE['font_prop'])
+
+    def _draw_lineup(self, ax, nodes_df, color, team_name, STYLE):
+        """Affiche la liste des joueurs (Numéro - Nom)"""
+        ax.axis('off')
+
+        # Préparer les données
+        if nodes_df.empty: return
+
+        # Convertir shirtNo en int pour le tri, gérer les cas non numériques
+        nodes_df = nodes_df.copy()
+        nodes_df['shirtNoInt'] = pd.to_numeric(nodes_df['shirtNo'], errors='coerce').fillna(999).astype(int)
+        lineup = nodes_df.sort_values('shirtNoInt')
+
+        # Affichage en 2 colonnes mais recentré (0.20 et 0.60) pour rester dans la largeur du terrain
+        # y_start légèrement descendu pour ne pas être trop haut
+        y_start = 0.96
+        y_step = 0.12
+
+        half = (len(lineup) + 1) // 2
+        col1 = lineup.iloc[:half]
+        col2 = lineup.iloc[half:]
+
+        # Colonne Gauche (Alignée visuellement avec le terrain)
+        y_pos = y_start
+        for _, row in col1.iterrows():
+            txt = f"{row['shirtNo']} - {row['name']}"
+            ax.text(0.20, y_pos, txt, color='white', fontsize=13, ha='left', fontproperties=STYLE['font_prop'])
+            y_pos -= y_step
+
+        # Colonne Droite (Alignée visuellement avec le terrain)
+        y_pos = y_start
+        for _, row in col2.iterrows():
+            txt = f"{row['shirtNo']} - {row['name']}"
+            ax.text(0.60, y_pos, txt, color='white', fontsize=13, ha='left', fontproperties=STYLE['font_prop'])
+            y_pos -= y_step
+
+    def _draw_legend(self, ax, STYLE):
+        """Dessine la légende horizontale style 'The Athletic'"""
+        ax.axis('off')
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+
+        legend_y = 0.4
+
+        # --- PARTIE GAUCHE: VOLUME DE PASSES (Cercles) ---
+        # Texte gauche
+        ax.text(0.15, legend_y, "Peu de passes", ha='right', va='center',
+                color='white', fontsize=12, weight='bold', fontproperties=STYLE['font_prop'])
+
+        # 4 Cercles de taille croissante
+        sizes = [80, 200, 400, 700]
+        x_start = 0.17
+        x_spacing = 0.03
+
+        for i, s in enumerate(sizes):
+            # Cercle bleu creux (fond background, bordure bleue style Athletic)
+            ax.scatter(x_start + (i * x_spacing), legend_y, s=s,
+                       color=STYLE['background'], edgecolors=STYLE['legend_blue'], linewidth=1.5)
+
+        # Texte droite cercles
+        ax.text(x_start + (len(sizes) * x_spacing) + 0.0005, legend_y, "Beaucoup de passes", ha='left', va='center',
+                color='white', fontsize=12, weight='bold', fontproperties=STYLE['font_prop'])
+
+        # --- PARTIE DROITE: INTENSITÉ (Lignes) ---
+        # Centre droit start
+        right_start = 0.55
+
+        # Texte gauche lignes
+        ax.text(right_start, legend_y, "Combine peu", ha='right', va='center',
+                color='white', fontsize=12, weight='bold', fontproperties=STYLE['font_prop'])
+
+        # 3 Lignes d'épaisseur croissante
+        widths = [1, 3, 6]
+        line_length = 0.04
+        line_spacing = 0.01
+        current_x = right_start + 0.02
+
+        for w in widths:
+            ax.plot([current_x, current_x + line_length], [legend_y, legend_y],
+                    color='white', lw=w)
+            current_x += line_length + line_spacing
+
+        # Texte droite lignes
+        ax.text(current_x + 0.01, legend_y, "Combine beaucoup", ha='left', va='center',
+                color='white', fontsize=12, weight='bold', fontproperties=STYLE['font_prop'])
 
 # --- FONCTION PRINCIPALE ---
 
