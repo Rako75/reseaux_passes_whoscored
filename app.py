@@ -143,6 +143,8 @@ class StreamlitDownloader:
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         
         # --- DÉTECTION DU DRIVER SYSTÈME (La clé du succès sur Cloud) ---
         # On cherche le binaire 'chromedriver' installé par packages.txt
@@ -166,19 +168,14 @@ class StreamlitDownloader:
             
             with st.spinner(f"🌍 Connexion à WhoScored pour récupérer les données..."):
                 driver.get(url)
-                time.sleep(5) # Attente un peu plus longue
+                time.sleep(6) # Attente chargement initial augmentée
                 
                 # Gestion Anti-bot basique
                 content = driver.page_source
-                if "Incapsula" in content or "challenge" in content.lower() or "Just a moment" in content:
+                if "Incapsula" in content or "challenge" in content.lower():
                     st.warning("🛡️ Vérification de sécurité détectée, attente prolongée...")
-                    time.sleep(10)
+                    time.sleep(12)
                     content = driver.page_source
-                
-                # VÉRIFICATION CRITIQUE : Les données sont-elles là ?
-                if "require.config.params" not in content:
-                    st.error("❌ Échec : La page récupérée semble être une protection anti-robot (Captcha) et ne contient pas les données.")
-                    return False
                 
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(content)
@@ -197,7 +194,7 @@ class StreamlitDownloader:
                     pass
 
 class MatchParser:
-    """Parse le HTML pour extraire le JSON caché."""
+    """Parse le HTML pour extraire le JSON caché avec plusieurs méthodes."""
     def __init__(self, html_path):
         self.html_path = html_path
         self.soup = None
@@ -209,30 +206,97 @@ class MatchParser:
                 content = f.read()
             self.soup = BeautifulSoup(content, 'html.parser')
             
-            # Extraction Regex du JSON de config
-            # AMÉLIORATION : Support des guillemets simples OU doubles
-            regex = r"require\.config\.params\[[\"']args[\"']\]\s*=\s*({.*?});"
-            match = re.search(regex, content, re.DOTALL)
+            # MÉTHODE 1 : Regex classique (require.config.params)
+            regex1 = r"require\.config\.params\[\"args\"\]\s*=\s*({.*?});"
+            match1 = re.search(regex1, content, re.DOTALL)
             
-            if not match: 
-                # Diagnostic plus précis pour l'utilisateur
-                if "Incapsula" in content or "challenge" in content or "Just a moment" in content:
-                     raise ValueError("Le fichier HTML est une page de protection Anti-Bot (Captcha), pas le match.")
-                raise ValueError("JSON de données introuvable dans le HTML (Format non reconnu)")
+            if match1:
+                json_str = match1.group(1)
+                return self._clean_and_parse_json(json_str)
             
-            json_str = match.group(1)
-            # Nettoyage JS -> JSON standard
-            for key in ['matchId', 'matchCentreData', 'matchCentreEventTypeJson', 'formationIdNameMappings']:
-                json_str = json_str.replace(key, f'"{key}"')
-            return json.loads(json_str)
+            # MÉTHODE 2 : Recherche de matchCentreData directement
+            regex2 = r"matchCentreData:\s*({.*?}),\s*matchCentreEventTypeJson"
+            match2 = re.search(regex2, content, re.DOTALL)
+            
+            if match2:
+                json_str = match2.group(1)
+                # Dans ce cas, on reconstruit la structure attendue
+                parsed = self._clean_and_parse_json(json_str)
+                return {'matchCentreData': parsed}
+            
+            # MÉTHODE 3 : Recherche dans les balises script
+            scripts = self.soup.find_all('script')
+            for script in scripts:
+                script_text = script.string
+                if script_text and 'matchCentreData' in script_text:
+                    # Essayer d'extraire le JSON
+                    match3 = re.search(r'matchCentreData["\']?\s*:\s*({.*?})\s*[,}]', script_text, re.DOTALL)
+                    if match3:
+                        json_str = match3.group(1)
+                        parsed = self._clean_and_parse_json(json_str)
+                        return {'matchCentreData': parsed}
+            
+            # MÉTHODE 4 : Recherche plus agressive dans tout le HTML
+            all_matches = re.finditer(r'({[^{}]*"home"[^{}]*"away"[^{}]*"events"[^{}]*})', content)
+            for match in all_matches:
+                try:
+                    json_str = match.group(1)
+                    parsed = self._clean_and_parse_json(json_str)
+                    if 'home' in parsed and 'away' in parsed and 'events' in parsed:
+                        return {'matchCentreData': parsed}
+                except:
+                    continue
+            
+            raise ValueError("❌ Impossible de trouver le JSON de données. Le format de la page a peut-être changé.")
+            
         except Exception as e:
-            raise ValueError(f"Erreur de parsing : {e}")
+            raise ValueError(f"❌ Erreur de parsing : {e}")
+
+    def _clean_and_parse_json(self, json_str):
+        """Nettoie et parse une chaîne JSON-like en vraie structure JSON."""
+        # Liste des clés connues à quoter
+        keys_to_quote = [
+            'matchId', 'matchCentreData', 'matchCentreEventTypeJson', 'formationIdNameMappings',
+            'home', 'away', 'score', 'htScore', 'ftScore', 'etScore', 'pkScore',
+            'events', 'playerIdNameDictionary', 'teamId', 'name', 'managerName',
+            'players', 'playerId', 'shirtNo', 'position', 'isFirstEleven',
+            'age', 'height', 'weight', 'isManOfTheMatch', 'stats', 'ratings',
+            'type', 'displayName', 'outcomeType', 'qualifiers', 'satisfiedEventsTypes',
+            'x', 'y', 'endX', 'endY', 'id', 'eventId', 'minute', 'second',
+            'teamFormation', 'formations', 'startTime', 'venueName', 'attendance',
+            'weatherCode', 'elapsed', 'statusCode', 'periodCode'
+        ]
+        
+        for key in keys_to_quote:
+            # Remplacer key: par "key": (sans quotes autour)
+            json_str = re.sub(rf'\b{key}\s*:', f'"{key}":', json_str)
+        
+        # Remplacer les undefined par null
+        json_str = re.sub(r'\bundefined\b', 'null', json_str)
+        
+        # Nettoyer les virgules en trop
+        json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
+        
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            # Dernier recours : mode debug
+            st.warning(f"⚠️ Erreur JSON détectée : {e}")
+            st.text_area("JSON problématique (500 premiers caractères)", json_str[:500])
+            raise ValueError(f"JSON invalide après nettoyage : {e}")
 
     def get_all_data(self):
+        if 'matchCentreData' not in self.data:
+            raise ValueError("Structure de données incorrecte : 'matchCentreData' manquant")
+        
         mc = self.data['matchCentreData']
         
+        # Vérifications de sécurité
+        if 'home' not in mc or 'away' not in mc:
+            raise ValueError("Données des équipes manquantes dans matchCentreData")
+        
         match_info = {
-            'score': mc['score'],
+            'score': mc.get('score', 'N/A'),
             'venue': mc.get('venueName', 'Stade Inconnu'),
             'startTime': mc.get('startTime', ''),
         }
@@ -243,13 +307,15 @@ class MatchParser:
         
         teams = {
             'home': {
-                'id': mc['home']['teamId'], 'name': mc['home']['name'],
-                'manager': mc['home'].get('managerName', ''),
+                'id': mc['home'].get('teamId', 0), 
+                'name': mc['home'].get('name', 'Équipe Domicile'),
+                'manager': mc['home'].get('managerName', 'N/A'),
                 'formation': formations[0] if len(formations) > 0 else 'N/A'
             },
             'away': {
-                'id': mc['away']['teamId'], 'name': mc['away']['name'],
-                'manager': mc['away'].get('managerName', ''),
+                'id': mc['away'].get('teamId', 0), 
+                'name': mc['away'].get('name', 'Équipe Extérieur'),
+                'manager': mc['away'].get('managerName', 'N/A'),
                 'formation': formations[1] if len(formations) > 1 else 'N/A'
             }
         }
@@ -271,20 +337,36 @@ class MatchParser:
 class PassNetworkEngine:
     """Calcule les réseaux de passes."""
     def process(self, mc):
+        if 'events' not in mc:
+            raise ValueError("Aucun événement trouvé dans les données du match")
+        
         events = pd.DataFrame(mc['events'])
         
         # Extraction joueurs
         players_list = []
         for side in ['home', 'away']:
+            if side not in mc or 'teamId' not in mc[side]:
+                continue
             tid = mc[side]['teamId']
-            for p in mc[side]['players']:
-                p['teamId'] = tid
-                players_list.append(p)
+            if 'players' in mc[side]:
+                for p in mc[side]['players']:
+                    p['teamId'] = tid
+                    players_list.append(p)
+        
+        if not players_list:
+            raise ValueError("Aucun joueur trouvé dans les données")
+        
         df_players = pd.DataFrame(players_list)
         
         # Sécurisation des colonnes
         for col in ['endX', 'endY', 'x', 'y']:
-            if col not in events.columns: events[col] = 0.0
+            if col not in events.columns: 
+                events[col] = 0.0
+        
+        if 'type' not in events.columns:
+            events['type'] = None
+        if 'outcomeType' not in events.columns:
+            events['outcomeType'] = None
             
         # Nettoyage types
         events['type'] = events['type'].apply(lambda x: x.get('displayName') if isinstance(x, dict) else x)
@@ -303,8 +385,14 @@ class PassNetworkEngine:
         starters = players[(players['teamId'] == team_id) & (players['isFirstEleven'] == True)]
         starter_ids = starters['playerId'].unique()
         
+        if len(starter_ids) == 0:
+            return pd.DataFrame(), pd.DataFrame(columns=['playerId', 'name', 'shirtNo', 'position', 'x', 'y', 'count'])
+        
         # 2. Filtrer events de l'équipe et des titulaires
         team_events = events[(events['teamId'] == team_id) & (events['playerId'].isin(starter_ids))]
+        
+        if team_events.empty:
+            return pd.DataFrame(), pd.DataFrame(columns=['playerId', 'name', 'shirtNo', 'position', 'x', 'y', 'count'])
         
         # 3. Positions moyennes
         avg_locs = team_events.groupby('playerId').agg({'x':'mean', 'y':'mean', 'id':'count'}).rename(columns={'id':'count'})
@@ -314,8 +402,12 @@ class PassNetworkEngine:
         passes = team_events[
             (team_events['type'] == 'Pass') & 
             (team_events['outcomeType'] == 'Successful') & 
+            (team_events['receiverId'].notna()) &
             (team_events['receiverId'].isin(starter_ids))
         ].copy()
+        
+        if passes.empty:
+            return pd.DataFrame(), avg_locs
         
         # Clé unique pour la paire de joueurs (triée pour éviter doublons A->B et B->A si on veut du non-orienté)
         passes['pair'] = passes.apply(lambda r: tuple(sorted([r['playerId'], r['receiverId']])), axis=1)
@@ -352,11 +444,13 @@ class DashboardVisualizer:
         ax_h = fig.add_subplot(gs[0, :])
         ax_h.axis('off')
         
-        score_text = match_info['score'].replace(' : ', '-')
+        score_text = str(match_info.get('score', 'N/A')).replace(' : ', '-')
         ax_h.text(0.5, 0.5, score_text, ha='center', va='center', fontsize=60, color='white', weight='bold', fontproperties=FONT_PROP)
         
         # Date et Lieu
-        meta_text = f"{match_info['startTime'][:10]} | {match_info['venue']}"
+        start_time = match_info.get('startTime', '')
+        date_display = start_time[:10] if len(start_time) >= 10 else 'Date inconnue'
+        meta_text = f"{date_display} | {match_info.get('venue', 'Stade')}"
         ax_h.text(0.5, 0.9, meta_text, ha='center', color=STYLE['sub'], fontsize=14, fontproperties=FONT_PROP)
         
         # Noms équipes
@@ -374,7 +468,8 @@ class DashboardVisualizer:
                         im = OffsetImage(img, zoom=0.8)
                         ab = AnnotationBbox(im, (x_pos, 0.5), frameon=False, xycoords='axes fraction')
                         ax_h.add_artist(ab)
-            except: pass
+            except: 
+                pass
             
         add_logo(home_logo_url, 0.10)
         add_logo(away_logo_url, 0.90)
@@ -419,6 +514,7 @@ class DashboardVisualizer:
             if nodes.empty: return
             
             # Tri par numéro
+            nodes = nodes.copy()
             nodes['shirtNoInt'] = pd.to_numeric(nodes['shirtNo'], errors='coerce').fillna(999).astype(int)
             lineup = nodes.sort_values('shirtNoInt')
             
@@ -535,21 +631,23 @@ def main():
             
             try:
                 # 1. Parsing
-                parser = MatchParser(file_path)
-                mc, match_info, teams, logos = parser.get_all_data()
+                with st.spinner("🔍 Analyse du fichier HTML..."):
+                    parser = MatchParser(file_path)
+                    mc, match_info, teams, logos = parser.get_all_data()
                 
                 # 2. Calculs
-                engine = PassNetworkEngine()
-                events, players = engine.process(mc)
-                
-                home_net, home_nodes = engine.get_network(teams['home']['id'], events, players)
-                away_net, away_nodes = engine.get_network(teams['away']['id'], events, players)
+                with st.spinner("⚙️ Calcul des réseaux de passes..."):
+                    engine = PassNetworkEngine()
+                    events, players = engine.process(mc)
+                    
+                    home_net, home_nodes = engine.get_network(teams['home']['id'], events, players)
+                    away_net, away_nodes = engine.get_network(teams['away']['id'], events, players)
                 
                 # 3. Affichage Onglets
                 tab1, tab2 = st.tabs(["📊 Pass Network & Dashboard", "📈 Statistiques Détaillées"])
                 
                 with tab1:
-                    with st.spinner("Génération de la visualisation tactique..."):
+                    with st.spinner("🎨 Génération de la visualisation tactique..."):
                         viz = DashboardVisualizer()
                         fig = viz.create_dashboard(
                             match_info, teams, 
@@ -561,7 +659,7 @@ def main():
                         
                         # Bouton Download
                         buf = BytesIO()
-                        fig.savefig(buf, format="png", facecolor='#0E1117', bbox_inches='tight')
+                        fig.savefig(buf, format="png", facecolor='#0E1117', bbox_inches='tight', dpi=150)
                         st.download_button(
                             label="💾 Télécharger la visualisation HD",
                             data=buf.getvalue(),
@@ -573,32 +671,71 @@ def main():
                 with tab2:
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.subheader(f"{teams['home']['name']}")
+                        st.subheader(f"🏠 {teams['home']['name']}")
+                        st.caption(f"Formation: {teams['home']['formation']} | Manager: {teams['home']['manager']}")
                         if not home_nodes.empty:
+                            display_df = home_nodes[['name', 'shirtNo', 'count', 'position']].copy()
+                            display_df.columns = ['Joueur', 'N°', 'Actions', 'Poste']
                             st.dataframe(
-                                home_nodes[['name', 'shirtNo', 'count', 'position']].sort_values('count', ascending=False), 
+                                display_df.sort_values('Actions', ascending=False), 
                                 hide_index=True, 
                                 use_container_width=True
                             )
+                        else:
+                            st.info("Aucune donnée disponible")
+                            
                     with col2:
-                        st.subheader(f"{teams['away']['name']}")
+                        st.subheader(f"✈️ {teams['away']['name']}")
+                        st.caption(f"Formation: {teams['away']['formation']} | Manager: {teams['away']['manager']}")
                         if not away_nodes.empty:
+                            display_df = away_nodes[['name', 'shirtNo', 'count', 'position']].copy()
+                            display_df.columns = ['Joueur', 'N°', 'Actions', 'Poste']
                             st.dataframe(
-                                away_nodes[['name', 'shirtNo', 'count', 'position']].sort_values('count', ascending=False), 
+                                display_df.sort_values('Actions', ascending=False), 
                                 hide_index=True,
                                 use_container_width=True
                             )
+                        else:
+                            st.info("Aucune donnée disponible")
 
             except Exception as e:
-                st.error(f"Erreur lors de l'analyse : {e}")
-                st.info("Le fichier source semble corrompu ou incomplet. Essayez de le retélécharger.")
+                st.error(f"❌ Erreur lors de l'analyse : {e}")
+                
+                # Affichage debug en mode développement
+                with st.expander("🔧 Informations de débogage"):
+                    st.text(f"Erreur complète: {str(e)}")
+                    st.text(f"Type: {type(e).__name__}")
+                    
+                    if os.path.exists(file_path):
+                        st.text(f"Taille du fichier: {os.path.getsize(file_path)} octets")
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            preview = f.read(1000)
+                        st.text_area("Aperçu HTML (1000 premiers caractères)", preview)
+                
+                st.info("💡 Le fichier source semble corrompu ou incomplet. Essayez de le retélécharger.")
+                
                 # Option de suppression pour retélécharger
-                if st.button("🗑️ Supprimer le fichier corrompu"):
-                    os.remove(file_path)
-                    st.rerun()
+                if st.button("🗑️ Supprimer le fichier corrompu et retélécharger"):
+                    try:
+                        os.remove(file_path)
+                        st.success("Fichier supprimé. Rechargement de la page...")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as del_err:
+                        st.error(f"Erreur lors de la suppression : {del_err}")
 
     else:
+        # Message d'accueil
         st.info("👈 Sélectionnez un match dans le menu de gauche pour commencer.")
+        
+        # Statistiques du cache
+        if os.path.exists(DATA_FOLDER):
+            cached_files = [f for f in os.listdir(DATA_FOLDER) if f.endswith('.html')]
+            if cached_files:
+                st.success(f"📦 {len(cached_files)} match(s) en cache local")
+                with st.expander("Voir les matchs en cache"):
+                    for f in sorted(cached_files):
+                        st.text(f"- {f}")
 
 if __name__ == "__main__":
     main()
