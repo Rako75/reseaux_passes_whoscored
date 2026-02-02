@@ -13,6 +13,7 @@ import re
 import json
 import time
 import requests
+import shutil
 from io import BytesIO
 
 # --- CONFIGURATION DE LA PAGE ---
@@ -35,28 +36,34 @@ if not os.path.exists(DATA_FOLDER):
 # --- STYLE CSS PERSONNALISÉ ---
 st.markdown("""
     <style>
-    .main {
+    /* Fond global sombre */
+    .stApp {
         background-color: #0E1117;
     }
+    /* Titres */
     h1, h2, h3 {
-        color: #FFFFFF;
+        color: #FFFFFF !important;
         font-family: 'Helvetica Neue', sans-serif;
     }
+    /* Boutons */
     .stButton>button {
         width: 100%;
-        background-color: #FF4B4B;
-        color: white;
+        background-color: #38003c; /* Violet PL */
+        color: #00FF85; /* Vert fluo PL */
+        border: 1px solid #00FF85;
         border-radius: 5px;
         font-weight: bold;
+        transition: all 0.3s ease;
     }
     .stButton>button:hover {
-        background-color: #FF2B2B;
+        background-color: #00FF85;
+        color: #38003c;
         border-color: white;
     }
-    div[data-testid="metric-container"] {
+    /* Messages d'alerte */
+    .stAlert {
         background-color: #1E1E1E;
-        padding: 10px;
-        border-radius: 8px;
+        color: white;
         border: 1px solid #333;
     }
     </style>
@@ -88,6 +95,7 @@ def load_match_list():
     i = 0
     while i < len(lines):
         line = lines[i].strip()
+        # Regex pour capturer l'ID et le Titre
         header_match = re.search(r'^Match (\d+) - (.+)', line)
         
         if header_match:
@@ -104,7 +112,7 @@ def load_match_list():
                         break
             
             if url:
-                # Estimation de la journée (Gameweek)
+                # Estimation de la journée (Gameweek) basée sur l'ordre
                 gameweek = (len(matches) // 10) + 1 
                 matches.append({
                     'id': mid, 
@@ -119,57 +127,72 @@ def load_match_list():
 # --- CLASSES LOGIQUE MÉTIER ---
 
 class StreamlitDownloader:
-    """Téléchargeur optimisé pour Streamlit Cloud."""
+    """Téléchargeur robuste compatible Streamlit Cloud & Linux."""
+    
     def download_match(self, url, filename):
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
         from selenium.webdriver.chrome.service import Service
-        from webdriver_manager.chrome import ChromeDriverManager
         
         filepath = os.path.join(DATA_FOLDER, filename)
         
+        # --- CONFIGURATION CHROME ---
         options = Options()
-        options.add_argument("--headless")
+        options.add_argument("--headless=new") # Mode sans interface graphique
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
         
-        # Gestion intelligente du driver (Local vs Cloud)
-        service = None
-        try:
-            # Tentative 1 : Installation automatique (Local)
-            service = Service(ChromeDriverManager().install())
-        except:
-            # Tentative 2 : Chemin système (Streamlit Cloud)
-            # Nécessite packages.txt avec chromium et chromium-driver
-            service = Service("/usr/bin/chromedriver")
+        # --- DÉTECTION DU DRIVER SYSTÈME (La clé du succès sur Cloud) ---
+        # On cherche le binaire 'chromedriver' installé par packages.txt
+        system_chromedriver = shutil.which("chromedriver")
+        
+        if system_chromedriver:
+            # Cas : Streamlit Cloud / Linux avec paquets installés
+            service = Service(system_chromedriver)
+        else:
+            # Cas : Local (Windows/Mac) sans driver système -> on utilise le manager
+            try:
+                from webdriver_manager.chrome import ChromeDriverManager
+                service = Service(ChromeDriverManager().install())
+            except Exception as e:
+                st.error(f"❌ Impossible de configurer le driver : {e}")
+                return False
 
         driver = None
         try:
             driver = webdriver.Chrome(service=service, options=options)
             
-            with st.spinner(f"📥 Téléchargement des données tactiques depuis WhoScored..."):
+            with st.spinner(f"🌍 Connexion à WhoScored pour récupérer les données..."):
                 driver.get(url)
-                time.sleep(5)
+                time.sleep(4) # Attente chargement initial
                 
+                # Gestion Anti-bot basique
                 content = driver.page_source
-                if "Incapsula" in content:
-                    st.warning("⚠️ Protection anti-bot détectée. Nouvelle tentative...")
-                    time.sleep(10)
+                if "Incapsula" in content or "challenge" in content.lower():
+                    st.warning("🛡️ Vérification de sécurité détectée, attente prolongée...")
+                    time.sleep(8)
                     content = driver.page_source
                 
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(content)
             
             return True
+
         except Exception as e:
-            st.error(f"Erreur Selenium : {e}")
+            st.error(f"❌ Erreur Selenium : {str(e)}")
             return False
+            
         finally:
             if driver:
-                driver.quit()
+                try:
+                    driver.quit()
+                except:
+                    pass
 
 class MatchParser:
+    """Parse le HTML pour extraire le JSON caché."""
     def __init__(self, html_path):
         self.html_path = html_path
         self.soup = None
@@ -181,27 +204,29 @@ class MatchParser:
                 content = f.read()
             self.soup = BeautifulSoup(content, 'html.parser')
             
+            # Extraction Regex du JSON de config
             regex = r"require\.config\.params\[\"args\"\]\s*=\s*({.*?});"
             match = re.search(regex, content, re.DOTALL)
-            if not match: raise ValueError("JSON introuvable dans le HTML")
+            if not match: raise ValueError("JSON de données introuvable dans le HTML")
             
             json_str = match.group(1)
-            # Nettoyage JS -> JSON
+            # Nettoyage JS -> JSON standard
             for key in ['matchId', 'matchCentreData', 'matchCentreEventTypeJson', 'formationIdNameMappings']:
                 json_str = json_str.replace(key, f'"{key}"')
             return json.loads(json_str)
         except Exception as e:
-            raise ValueError(f"Parsing failed: {e}")
+            raise ValueError(f"Erreur de parsing : {e}")
 
     def get_all_data(self):
         mc = self.data['matchCentreData']
         
         match_info = {
             'score': mc['score'],
-            'venue': mc.get('venueName', 'Unknown'),
+            'venue': mc.get('venueName', 'Stade Inconnu'),
             'startTime': mc.get('startTime', ''),
         }
         
+        # Formations
         fmt_divs = self.soup.find_all('div', class_='formation')
         formations = [d.get_text(strip=True) for d in fmt_divs]
         
@@ -218,17 +243,22 @@ class MatchParser:
             }
         }
         
-        # Extraction URLs Logos
+        # Logos URLs
         logos = {}
         emblems = self.soup.find_all('div', class_='team-emblem')
         for i, emblem in enumerate(emblems[:2]):
             img = emblem.find('img')
             if img and img.get('src'):
-                logos[i] = img['src'].replace('http:', 'https:') if img['src'].startswith('//') else img['src']
+                # Correction des URLs relatives
+                url = img['src']
+                if url.startswith('//'):
+                    url = 'https:' + url
+                logos[i] = url
 
         return mc, match_info, teams, logos
 
 class PassNetworkEngine:
+    """Calcule les réseaux de passes."""
     def process(self, mc):
         events = pd.DataFrame(mc['events'])
         
@@ -241,14 +271,15 @@ class PassNetworkEngine:
                 players_list.append(p)
         df_players = pd.DataFrame(players_list)
         
-        # Nettoyage Events
+        # Sécurisation des colonnes
         for col in ['endX', 'endY', 'x', 'y']:
             if col not in events.columns: events[col] = 0.0
             
+        # Nettoyage types
         events['type'] = events['type'].apply(lambda x: x.get('displayName') if isinstance(x, dict) else x)
         events['outcomeType'] = events['outcomeType'].apply(lambda x: x.get('displayName') if isinstance(x, dict) else x)
         
-        # Identifier receveur
+        # Identifier receveur (passe réussie vers coéquipier)
         events['next_teamId'] = events['teamId'].shift(-1)
         events['next_playerId'] = events['playerId'].shift(-1)
         mask = (events['type'] == 'Pass') & (events['outcomeType'] == 'Successful') & (events['teamId'] == events['next_teamId'])
@@ -257,26 +288,25 @@ class PassNetworkEngine:
         return events, df_players
 
     def get_network(self, team_id, events, players, min_passes=3):
-        # Filtrer titulaires
+        # 1. Filtrer titulaires uniquement
         starters = players[(players['teamId'] == team_id) & (players['isFirstEleven'] == True)]
         starter_ids = starters['playerId'].unique()
         
-        # Filtrer events de l'équipe et des titulaires
+        # 2. Filtrer events de l'équipe et des titulaires
         team_events = events[(events['teamId'] == team_id) & (events['playerId'].isin(starter_ids))]
         
-        # Positions moyennes
+        # 3. Positions moyennes
         avg_locs = team_events.groupby('playerId').agg({'x':'mean', 'y':'mean', 'id':'count'}).rename(columns={'id':'count'})
         avg_locs = avg_locs.merge(players[['playerId', 'name', 'shirtNo', 'position']], on='playerId')
         
-        # Passes entre titulaires
+        # 4. Calcul des passes
         passes = team_events[
             (team_events['type'] == 'Pass') & 
             (team_events['outcomeType'] == 'Successful') & 
             (team_events['receiverId'].isin(starter_ids))
         ].copy()
         
-        # Création paire unique (toujours triée) pour compter A->B et B->A ensemble ou séparément ?
-        # Ici on veut des liens non-dirigés pour l'épaisseur souvent, mais gardons le standard
+        # Clé unique pour la paire de joueurs (triée pour éviter doublons A->B et B->A si on veut du non-orienté)
         passes['pair'] = passes.apply(lambda r: tuple(sorted([r['playerId'], r['receiverId']])), axis=1)
         pass_counts = passes.groupby('pair').size().reset_index(name='pass_count')
         pass_counts = pass_counts[pass_counts['pass_count'] >= min_passes]
@@ -284,7 +314,6 @@ class PassNetworkEngine:
         network = []
         for _, row in pass_counts.iterrows():
             p1, p2 = row['pair']
-            # Vérif existence
             if p1 in avg_locs['playerId'].values and p2 in avg_locs['playerId'].values:
                 l1 = avg_locs[avg_locs['playerId'] == p1].iloc[0]
                 l2 = avg_locs[avg_locs['playerId'] == p2].iloc[0]
@@ -298,6 +327,7 @@ class PassNetworkEngine:
         return pd.DataFrame(network), avg_locs
 
 class DashboardVisualizer:
+    """Gère le tracé Matplotlib."""
     def create_dashboard(self, match_info, teams, home_net, home_nodes, away_net, away_nodes, home_logo_url, away_logo_url):
         STYLE = {
             'background': '#0E1117', 'text': 'white', 'sub': '#A0A0A0',
@@ -311,11 +341,14 @@ class DashboardVisualizer:
         ax_h = fig.add_subplot(gs[0, :])
         ax_h.axis('off')
         
-        # Textes
         score_text = match_info['score'].replace(' : ', '-')
         ax_h.text(0.5, 0.5, score_text, ha='center', va='center', fontsize=60, color='white', weight='bold', fontproperties=FONT_PROP)
-        ax_h.text(0.5, 0.9, f"{match_info['startTime'][:10]} | {match_info['venue']}", ha='center', color=STYLE['sub'], fontsize=14, fontproperties=FONT_PROP)
         
+        # Date et Lieu
+        meta_text = f"{match_info['startTime'][:10]} | {match_info['venue']}"
+        ax_h.text(0.5, 0.9, meta_text, ha='center', color=STYLE['sub'], fontsize=14, fontproperties=FONT_PROP)
+        
+        # Noms équipes
         ax_h.text(0.35, 0.65, teams['home']['name'].upper(), ha='right', fontsize=30, color=STYLE['home'], weight='bold', fontproperties=FONT_PROP)
         ax_h.text(0.65, 0.65, teams['away']['name'].upper(), ha='left', fontsize=30, color=STYLE['away'], weight='bold', fontproperties=FONT_PROP)
         
@@ -343,20 +376,19 @@ class DashboardVisualizer:
             # Arêtes (Passes)
             if not net.empty:
                 max_width = net['pass_count'].max()
-                # Éviter division par zéro
                 if max_width == 0: max_width = 1
-                width = (net['pass_count'] / max_width * 10)
-                pitch.lines(net['x_start'], net['y_start'], net['x_end'], net['y_end'], lw=width, ax=ax, color=color, alpha=0.6, zorder=2)
+                width = (net['pass_count'] / max_width * 12)
+                pitch.lines(net['x_start'], net['y_start'], net['x_end'], net['y_end'], lw=width, ax=ax, color=color, alpha=0.5, zorder=2)
             
             # Noeuds (Joueurs)
             if not nodes.empty:
                 max_size = nodes['count'].max()
                 if max_size == 0: max_size = 1
-                sizes = (nodes['count'] / max_size) * 1000
+                sizes = (nodes['count'] / max_size) * 1200
                 pitch.scatter(nodes['x'], nodes['y'], s=sizes, color=STYLE['background'], edgecolors=color, linewidth=2, zorder=3, ax=ax)
                 
                 for _, row in nodes.iterrows():
-                    pitch.annotate(row['shirtNo'], (row['x'], row['y']), va='center', ha='center', color='white', fontsize=10, weight='bold', ax=ax, fontproperties=FONT_PROP)
+                    pitch.annotate(row['shirtNo'], (row['x'], row['y']), va='center', ha='center', color='white', fontsize=11, weight='bold', ax=ax, fontproperties=FONT_PROP)
 
         ax_home = fig.add_subplot(gs[2, 0])
         draw_pitch(ax_home, home_net, home_nodes, STYLE['home'])
@@ -364,10 +396,11 @@ class DashboardVisualizer:
         ax_away = fig.add_subplot(gs[2, 2])
         draw_pitch(ax_away, away_net, away_nodes, STYLE['away'])
         
-        # Flèche centrale
+        # Flèche sens du jeu
         ax_arrow = fig.add_subplot(gs[2, 1])
         ax_arrow.axis('off')
         ax_arrow.arrow(0.5, 0.1, 0, 0.8, fc='white', ec='white', width=0.05, head_width=0.3, head_length=0.1)
+        ax_arrow.text(0.5, 0.05, "Jeu", ha='center', color='white', fontproperties=FONT_PROP)
         
         # --- COMPOSITIONS (Bas) ---
         def draw_lineup(ax, nodes, color):
@@ -378,20 +411,20 @@ class DashboardVisualizer:
             nodes['shirtNoInt'] = pd.to_numeric(nodes['shirtNo'], errors='coerce').fillna(999).astype(int)
             lineup = nodes.sort_values('shirtNoInt')
             
-            # Affichage 2 colonnes
             half = (len(lineup) + 1) // 2
             col1 = lineup.iloc[:half]
             col2 = lineup.iloc[half:]
             
-            y_pos = 0.9
+            y_pos = 0.95
+            step = 0.12
             for _, r in col1.iterrows():
-                ax.text(0.1, y_pos, f"{r['shirtNo']} - {r['name']}", color='white', fontsize=12, fontproperties=FONT_PROP)
-                y_pos -= 0.12
+                ax.text(0.1, y_pos, f"{r['shirtNo']} - {r['name']}", color='white', fontsize=13, fontproperties=FONT_PROP)
+                y_pos -= step
             
-            y_pos = 0.9
+            y_pos = 0.95
             for _, r in col2.iterrows():
-                ax.text(0.6, y_pos, f"{r['shirtNo']} - {r['name']}", color='white', fontsize=12, fontproperties=FONT_PROP)
-                y_pos -= 0.12
+                ax.text(0.6, y_pos, f"{r['shirtNo']} - {r['name']}", color='white', fontsize=13, fontproperties=FONT_PROP)
+                y_pos -= step
 
         ax_l_home = fig.add_subplot(gs[3, 0])
         draw_lineup(ax_l_home, home_nodes, STYLE['home'])
@@ -409,13 +442,13 @@ def main():
     st.markdown("---")
 
     # --- SIDEBAR ---
-    st.sidebar.header("Options de Configuration")
+    st.sidebar.header("Paramètres")
     mode = st.sidebar.radio("Mode de Sélection", ["📅 Calendrier / Journées", "🌐 URL Personnalisée"])
 
     selected_match_data = None
     needs_download = False
     
-    # 1. Sélection via Calendrier
+    # 1. Mode Calendrier
     if mode == "📅 Calendrier / Journées":
         matches = load_match_list()
         
@@ -427,11 +460,10 @@ def main():
             
             sel_gw = st.sidebar.selectbox("Choisir la Journée (GW)", gameweeks)
             
-            # Filtre les matchs de la journée
+            # Filtrer les matchs
             gw_matches = df_matches[df_matches['gameweek'] == sel_gw]
             
-            # === CORRECTION MAJEURE ===
-            # Création d'un dictionnaire d'options avec les données converties en dict
+            # CRUCIAL : Conversion en dict pour éviter l'erreur de Truth Value sur Series Pandas
             match_options = {
                 f"{r['title']} (Match #{r['id']})": r.to_dict() 
                 for _, r in gw_matches.iterrows()
@@ -440,16 +472,16 @@ def main():
             sel_match_key = st.sidebar.selectbox("Choisir le Match", list(match_options.keys()))
             selected_match_data = match_options[sel_match_key]
             
-            # Vérif locale
+            # Vérification fichier local
             file_path = os.path.join(DATA_FOLDER, selected_match_data['filename'])
             if os.path.exists(file_path):
-                st.sidebar.success("✅ Match disponible en local")
+                st.sidebar.success("✅ Données disponibles localement")
                 needs_download = False
             else:
-                st.sidebar.warning("☁️ Match en ligne (non téléchargé)")
+                st.sidebar.warning("☁️ Données à télécharger")
                 needs_download = True
 
-    # 2. Sélection via URL
+    # 2. Mode URL
     elif mode == "🌐 URL Personnalisée":
         url_input = st.sidebar.text_input("Coller l'URL WhoScored (Match Centre)")
         if url_input:
@@ -464,47 +496,49 @@ def main():
                 }
                 file_path = os.path.join(DATA_FOLDER, selected_match_data['filename'])
                 if os.path.exists(file_path):
-                    st.sidebar.success("✅ Match disponible en local")
+                    st.sidebar.success("✅ Données disponibles")
                     needs_download = False
                 else:
                     needs_download = True
             else:
-                st.sidebar.error("URL invalide. Doit contenir '/matches/ID/'")
+                st.sidebar.error("URL invalide. Assurez-vous qu'elle contient '/matches/ID/'")
 
-    # 3. Actions et Affichage
+    # 3. Logique d'affichage et Téléchargement
     if selected_match_data is not None:
         st.header(f"{selected_match_data['title']}")
         
         if needs_download:
-            st.info(f"Le match {selected_match_data['id']} n'est pas encore téléchargé.")
-            if st.button("🚀 Télécharger et Analyser maintenant", type="primary"):
+            st.info(f"Les données pour le match {selected_match_data['id']} ne sont pas présentes sur le serveur.")
+            if st.button("🚀 Télécharger et Analyser (Mode Live)", type="primary"):
                 downloader = StreamlitDownloader()
                 success = downloader.download_match(selected_match_data['url'], selected_match_data['filename'])
                 if success:
-                    st.success("Téléchargement réussi ! Rafraîchissement...")
+                    st.success("Téléchargement réussi ! Analyse en cours...")
                     time.sleep(1)
                     st.rerun()
                 else:
-                    st.error("Échec du téléchargement.")
+                    st.error("Échec du téléchargement. Veuillez réessayer.")
         else:
-            # Analyse si le fichier est présent
+            # Le fichier existe -> Analyse
             file_path = os.path.join(DATA_FOLDER, selected_match_data['filename'])
             
             try:
+                # 1. Parsing
                 parser = MatchParser(file_path)
                 mc, match_info, teams, logos = parser.get_all_data()
                 
+                # 2. Calculs
                 engine = PassNetworkEngine()
                 events, players = engine.process(mc)
                 
                 home_net, home_nodes = engine.get_network(teams['home']['id'], events, players)
                 away_net, away_nodes = engine.get_network(teams['away']['id'], events, players)
                 
-                # Onglets
-                tab1, tab2 = st.tabs(["📊 Pass Network", "📈 Stats Joueurs"])
+                # 3. Affichage Onglets
+                tab1, tab2 = st.tabs(["📊 Pass Network & Dashboard", "📈 Statistiques Détaillées"])
                 
                 with tab1:
-                    with st.spinner("Génération de la visualisation..."):
+                    with st.spinner("Génération de la visualisation tactique..."):
                         viz = DashboardVisualizer()
                         fig = viz.create_dashboard(
                             match_info, teams, 
@@ -514,11 +548,11 @@ def main():
                         )
                         st.pyplot(fig)
                         
-                        # Bouton téléchargement image
+                        # Bouton Download
                         buf = BytesIO()
                         fig.savefig(buf, format="png", facecolor='#0E1117', bbox_inches='tight')
                         st.download_button(
-                            label="💾 Télécharger l'image HD",
+                            label="💾 Télécharger la visualisation HD",
                             data=buf.getvalue(),
                             file_name=f"PassNetwork_{selected_match_data['id']}.png",
                             mime="image/png"
@@ -528,19 +562,32 @@ def main():
                 with tab2:
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.subheader(f"Joueurs - {teams['home']['name']}")
+                        st.subheader(f"{teams['home']['name']}")
                         if not home_nodes.empty:
-                            st.dataframe(home_nodes[['name', 'shirtNo', 'count', 'position']].sort_values('count', ascending=False), hide_index=True)
+                            st.dataframe(
+                                home_nodes[['name', 'shirtNo', 'count', 'position']].sort_values('count', ascending=False), 
+                                hide_index=True, 
+                                use_container_width=True
+                            )
                     with col2:
-                        st.subheader(f"Joueurs - {teams['away']['name']}")
+                        st.subheader(f"{teams['away']['name']}")
                         if not away_nodes.empty:
-                            st.dataframe(away_nodes[['name', 'shirtNo', 'count', 'position']].sort_values('count', ascending=False), hide_index=True)
+                            st.dataframe(
+                                away_nodes[['name', 'shirtNo', 'count', 'position']].sort_values('count', ascending=False), 
+                                hide_index=True,
+                                use_container_width=True
+                            )
 
             except Exception as e:
-                st.error(f"Erreur lors de l'analyse du fichier : {e}")
-                st.warning("Le fichier HTML est peut-être incomplet ou corrompu.")
+                st.error(f"Erreur lors de l'analyse : {e}")
+                st.info("Le fichier source semble corrompu ou incomplet. Essayez de le retélécharger.")
+                # Option de suppression pour retélécharger
+                if st.button("🗑️ Supprimer le fichier corrompu"):
+                    os.remove(file_path)
+                    st.rerun()
+
     else:
-        st.info("👈 Veuillez sélectionner un match dans la barre latérale.")
+        st.info("👈 Sélectionnez un match dans le menu de gauche pour commencer.")
 
 if __name__ == "__main__":
     main()
