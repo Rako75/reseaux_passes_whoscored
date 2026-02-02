@@ -15,8 +15,6 @@ import time
 import requests
 import shutil
 from io import BytesIO
-import plotly.graph_objects as go
-import plotly.express as px
 from datetime import datetime
 
 # --- CONFIGURATION DE LA PAGE ---
@@ -643,114 +641,6 @@ class PassNetworkEngine:
         
         return pd.DataFrame(network), avg_locs
 
-class AdvancedAnalytics:
-    """Analyses avancées des matchs"""
-    
-    @staticmethod
-    def calculate_team_stats(events, team_id, players):
-        """Calcule les statistiques détaillées d'une équipe"""
-        team_events = events[events['teamId'] == team_id]
-        
-        # Stats de base
-        total_passes = len(team_events[team_events['type'] == 'Pass'])
-        successful_passes = len(team_events[(team_events['type'] == 'Pass') & (team_events['outcomeType'] == 'Successful')])
-        pass_accuracy = (successful_passes / total_passes * 100) if total_passes > 0 else 0
-        
-        # Tirs
-        shots = len(team_events[team_events['type'].isin(['MissedShots', 'SavedShot', 'Goal', 'ShotOnPost'])])
-        shots_on_target = len(team_events[team_events['type'].isin(['SavedShot', 'Goal'])])
-        goals = len(team_events[team_events['type'] == 'Goal'])
-        
-        # Possession par tiers
-        def_third = len(team_events[(team_events['type'] == 'Pass') & (team_events['x'] < 33.3)])
-        mid_third = len(team_events[(team_events['type'] == 'Pass') & (team_events['x'] >= 33.3) & (team_events['x'] < 66.6)])
-        att_third = len(team_events[(team_events['type'] == 'Pass') & (team_events['x'] >= 66.6)])
-        
-        # Duels
-        duels = len(team_events[team_events['type'].isin(['Aerial', 'Tackle', 'Challenge'])])
-        duels_won = len(team_events[(team_events['type'].isin(['Aerial', 'Tackle', 'Challenge'])) & 
-                                     (team_events['outcomeType'] == 'Successful')])
-        
-        return {
-            'passes': total_passes,
-            'pass_accuracy': round(pass_accuracy, 1),
-            'shots': shots,
-            'shots_on_target': shots_on_target,
-            'goals': goals,
-            'def_third_passes': def_third,
-            'mid_third_passes': mid_third,
-            'att_third_passes': att_third,
-            'duels': duels,
-            'duels_won': duels_won,
-            'duel_success': round((duels_won / duels * 100) if duels > 0 else 0, 1)
-        }
-    
-    @staticmethod
-    def get_player_performance(events, players, team_id):
-        """Analyse la performance individuelle des joueurs"""
-        team_events = events[events['teamId'] == team_id]
-        team_players = players[players['teamId'] == team_id]
-        
-        player_stats = []
-        for _, player in team_players.iterrows():
-            player_events = team_events[team_events['playerId'] == player['playerId']]
-            
-            passes = len(player_events[player_events['type'] == 'Pass'])
-            successful_passes = len(player_events[(player_events['type'] == 'Pass') & 
-                                                   (player_events['outcomeType'] == 'Successful')])
-            
-            player_stats.append({
-                'name': player['name'],
-                'number': player['shirtNo'],
-                'position': player['position'],
-                'passes': passes,
-                'pass_accuracy': round((successful_passes / passes * 100) if passes > 0 else 0, 1),
-                'touches': len(player_events),
-                'isStarter': player['isFirstEleven']
-            })
-        
-        return pd.DataFrame(player_stats).sort_values('touches', ascending=False)
-    
-    @staticmethod
-    def create_heatmap_data(events, team_id):
-        """Crée les données pour une heatmap"""
-        team_events = events[(events['teamId'] == team_id) & (events['x'].notna()) & (events['y'].notna())]
-        
-        # Diviser le terrain en grille 10x10
-        team_events['x_bin'] = pd.cut(team_events['x'], bins=10, labels=False)
-        team_events['y_bin'] = pd.cut(team_events['y'], bins=10, labels=False)
-        
-        heatmap = team_events.groupby(['x_bin', 'y_bin']).size().reset_index(name='count')
-        
-        return heatmap
-    
-    @staticmethod
-    def analyze_passing_network_centrality(network_df, nodes_df):
-        """Analyse la centralité du réseau de passes"""
-        if network_df.empty or nodes_df.empty:
-            return pd.DataFrame()
-        
-        # Calculer le degré (nombre de connexions) pour chaque joueur
-        player_connections = {}
-        
-        for _, row in network_df.iterrows():
-            p1, p2 = row['player1'], row['player2']
-            player_connections[p1] = player_connections.get(p1, 0) + 1
-            player_connections[p2] = player_connections.get(p2, 0) + 1
-        
-        centrality_data = []
-        for player, connections in player_connections.items():
-            player_data = nodes_df[nodes_df['name'] == player]
-            if not player_data.empty:
-                centrality_data.append({
-                    'name': player,
-                    'connections': connections,
-                    'touches': player_data.iloc[0]['count'],
-                    'number': player_data.iloc[0]['shirtNo']
-                })
-        
-        return pd.DataFrame(centrality_data).sort_values('connections', ascending=False)
-
 class DashboardVisualizer:
     """Gère le rendu graphique - Version exacte du pipeline"""
 
@@ -1097,304 +987,34 @@ def main():
                     home_net, home_nodes = engine.get_network(teams['home']['id'], events, players)
                     away_net, away_nodes = engine.get_network(teams['away']['id'], events, players)
                 
-                # ONGLETS PRINCIPAUX
-                tab1, tab2, tab3, tab4, tab5 = st.tabs([
-                    "📊 Pass Network", 
-                    "📈 Stats Avancées",
-                    "🎯 Performance Joueurs",
-                    "🔥 Heatmaps",
-                    "🧠 Analyse Réseau"
-                ])
+                # VISUALISATION HAUTE QUALITÉ
+                st.markdown("---")
                 
-                # TAB 1: Pass Network
-                with tab1:
-                    with st.spinner("🎨 Génération du dashboard..."):
-                        viz = DashboardVisualizer()
-                        fig = viz.create_dashboard(
-                            match_info, teams, 
-                            home_net, home_nodes, 
-                            away_net, away_nodes, 
-                            logos.get(0), logos.get(1)
-                        )
-                        st.pyplot(fig)
-                        
-                        buf = BytesIO()
-                        fig.savefig(buf, format="png", facecolor='#0E1117', bbox_inches='tight', dpi=150)
-                        st.download_button(
-                            label="💾 Télécharger (HD)",
-                            data=buf.getvalue(),
-                            file_name=f"PassNetwork_{selected_match_data['id']}.png",
-                            mime="image/png"
-                        )
-                        plt.close(fig)
-                
-                # TAB 2: Stats Avancées
-                with tab2:
-                    analytics = AdvancedAnalytics()
-                    
-                    home_stats = analytics.calculate_team_stats(events, teams['home']['id'], players)
-                    away_stats = analytics.calculate_team_stats(events, teams['away']['id'], players)
-                    
-                    st.markdown("### 📊 Statistiques du Match")
-                    
-                    # Métriques principales
-                    col1, col2, col3, col4 = st.columns(4)
-                    
-                    with col1:
-                        st.metric(
-                            "🏠 Passes Domicile",
-                            home_stats['passes'],
-                            f"{home_stats['pass_accuracy']}% précision"
-                        )
-                    
-                    with col2:
-                        st.metric(
-                            "✈️ Passes Extérieur",
-                            away_stats['passes'],
-                            f"{away_stats['pass_accuracy']}% précision"
-                        )
-                    
-                    with col3:
-                        st.metric(
-                            "🎯 Tirs Domicile",
-                            home_stats['shots'],
-                            f"{home_stats['shots_on_target']} cadrés"
-                        )
-                    
-                    with col4:
-                        st.metric(
-                            "🎯 Tirs Extérieur",
-                            away_stats['shots'],
-                            f"{away_stats['shots_on_target']} cadrés"
-                        )
-                    
-                    # Graphique de possession par tiers
-                    st.markdown("### 🗺️ Contrôle Territorial")
-                    
-                    fig_territory = go.Figure()
-                    
-                    categories = ['Tiers Défensif', 'Tiers Milieu', 'Tiers Offensif']
-                    
-                    fig_territory.add_trace(go.Bar(
-                        name=teams['home']['name'],
-                        x=categories,
-                        y=[home_stats['def_third_passes'], home_stats['mid_third_passes'], home_stats['att_third_passes']],
-                        marker_color='#00BFFF'
-                    ))
-                    
-                    fig_territory.add_trace(go.Bar(
-                        name=teams['away']['name'],
-                        x=categories,
-                        y=[away_stats['def_third_passes'], away_stats['mid_third_passes'], away_stats['att_third_passes']],
-                        marker_color='#FF4B4B'
-                    ))
-                    
-                    fig_territory.update_layout(
-                        barmode='group',
-                        template='plotly_dark',
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(0,0,0,0)',
-                        font=dict(color='white'),
-                        height=400
+                with st.spinner("🎨 Génération de la visualisation haute qualité..."):
+                    viz = DashboardVisualizer()
+                    fig = viz.create_dashboard(
+                        match_info, teams, 
+                        home_net, home_nodes, 
+                        away_net, away_nodes, 
+                        logos.get(0), logos.get(1)
                     )
                     
-                    st.plotly_chart(fig_territory, use_container_width=True)
+                    # Affichage plein écran
+                    st.pyplot(fig, use_container_width=True)
                     
-                    # Duels
-                    st.markdown("### 🥊 Batailles Individuelles")
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown(f"#### {teams['home']['name']}")
-                        st.metric("Duels gagnés", f"{home_stats['duels_won']}/{home_stats['duels']}", 
-                                 f"{home_stats['duel_success']}%")
-                    
+                    # Bouton de téléchargement haute qualité
+                    col1, col2, col3 = st.columns([1, 2, 1])
                     with col2:
-                        st.markdown(f"#### {teams['away']['name']}")
-                        st.metric("Duels gagnés", f"{away_stats['duels_won']}/{away_stats['duels']}", 
-                                 f"{away_stats['duel_success']}%")
-                
-                # TAB 3: Performance Joueurs
-                with tab3:
-                    st.markdown("### 👥 Performance Individuelle")
-                    
-                    analytics = AdvancedAnalytics()
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown(f"#### 🏠 {teams['home']['name']}")
-                        home_perf = analytics.get_player_performance(events, players, teams['home']['id'])
-                        
-                        # Filtrer les titulaires
-                        starters = home_perf[home_perf['isStarter'] == True]
-                        
-                        st.dataframe(
-                            starters[['number', 'name', 'position', 'touches', 'passes', 'pass_accuracy']]
-                            .rename(columns={
-                                'number': 'N°',
-                                'name': 'Joueur',
-                                'position': 'Poste',
-                                'touches': 'Touches',
-                                'passes': 'Passes',
-                                'pass_accuracy': 'Précision %'
-                            }),
-                            hide_index=True,
+                        buf = BytesIO()
+                        fig.savefig(buf, format="png", facecolor='#0E1117', bbox_inches='tight', dpi=300)
+                        st.download_button(
+                            label="💾 Télécharger en Ultra HD (300 DPI)",
+                            data=buf.getvalue(),
+                            file_name=f"PassNetwork_{selected_match_data['id']}_UHD.png",
+                            mime="image/png",
                             use_container_width=True
                         )
-                    
-                    with col2:
-                        st.markdown(f"#### ✈️ {teams['away']['name']}")
-                        away_perf = analytics.get_player_performance(events, players, teams['away']['id'])
-                        
-                        starters = away_perf[away_perf['isStarter'] == True]
-                        
-                        st.dataframe(
-                            starters[['number', 'name', 'position', 'touches', 'passes', 'pass_accuracy']]
-                            .rename(columns={
-                                'number': 'N°',
-                                'name': 'Joueur',
-                                'position': 'Poste',
-                                'touches': 'Touches',
-                                'passes': 'Passes',
-                                'pass_accuracy': 'Précision %'
-                            }),
-                            hide_index=True,
-                            use_container_width=True
-                        )
-                
-                # TAB 4: Heatmaps
-                with tab4:
-                    st.markdown("### 🔥 Zones d'Activité")
-                    
-                    analytics = AdvancedAnalytics()
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown(f"#### {teams['home']['name']}")
-                        heatmap_data = analytics.create_heatmap_data(events, teams['home']['id'])
-                        
-                        if not heatmap_data.empty:
-                            # Créer une matrice 10x10
-                            heatmap_matrix = np.zeros((10, 10))
-                            for _, row in heatmap_data.iterrows():
-                                if not pd.isna(row['x_bin']) and not pd.isna(row['y_bin']):
-                                    x, y = int(row['x_bin']), int(row['y_bin'])
-                                    heatmap_matrix[y, x] = row['count']
-                            
-                            fig_heat = px.imshow(
-                                heatmap_matrix,
-                                color_continuous_scale='Blues',
-                                aspect='auto',
-                                labels=dict(color="Activité")
-                            )
-                            fig_heat.update_layout(
-                                template='plotly_dark',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                height=400
-                            )
-                            st.plotly_chart(fig_heat, use_container_width=True)
-                    
-                    with col2:
-                        st.markdown(f"#### {teams['away']['name']}")
-                        heatmap_data = analytics.create_heatmap_data(events, teams['away']['id'])
-                        
-                        if not heatmap_data.empty:
-                            heatmap_matrix = np.zeros((10, 10))
-                            for _, row in heatmap_data.iterrows():
-                                if not pd.isna(row['x_bin']) and not pd.isna(row['y_bin']):
-                                    x, y = int(row['x_bin']), int(row['y_bin'])
-                                    heatmap_matrix[y, x] = row['count']
-                            
-                            fig_heat = px.imshow(
-                                heatmap_matrix,
-                                color_continuous_scale='Reds',
-                                aspect='auto',
-                                labels=dict(color="Activité")
-                            )
-                            fig_heat.update_layout(
-                                template='plotly_dark',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                height=400
-                            )
-                            st.plotly_chart(fig_heat, use_container_width=True)
-                
-                # TAB 5: Analyse Réseau
-                with tab5:
-                    st.markdown("### 🧠 Analyse de Centralité")
-                    st.markdown("*Joueurs clés dans la construction du jeu*")
-                    
-                    analytics = AdvancedAnalytics()
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown(f"#### {teams['home']['name']}")
-                        centrality = analytics.analyze_passing_network_centrality(home_net, home_nodes)
-                        
-                        if not centrality.empty:
-                            st.dataframe(
-                                centrality[['number', 'name', 'connections', 'touches']]
-                                .rename(columns={
-                                    'number': 'N°',
-                                    'name': 'Joueur',
-                                    'connections': 'Connexions',
-                                    'touches': 'Touches'
-                                }),
-                                hide_index=True,
-                                use_container_width=True
-                            )
-                            
-                            # Graphique
-                            fig_cent = go.Figure(data=[
-                                go.Bar(
-                                    x=centrality['name'][:5],
-                                    y=centrality['connections'][:5],
-                                    marker_color='#00BFFF'
-                                )
-                            ])
-                            fig_cent.update_layout(
-                                title="Top 5 - Connexions",
-                                template='plotly_dark',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                height=300,
-                                showlegend=False
-                            )
-                            st.plotly_chart(fig_cent, use_container_width=True)
-                    
-                    with col2:
-                        st.markdown(f"#### {teams['away']['name']}")
-                        centrality = analytics.analyze_passing_network_centrality(away_net, away_nodes)
-                        
-                        if not centrality.empty:
-                            st.dataframe(
-                                centrality[['number', 'name', 'connections', 'touches']]
-                                .rename(columns={
-                                    'number': 'N°',
-                                    'name': 'Joueur',
-                                    'connections': 'Connexions',
-                                    'touches': 'Touches'
-                                }),
-                                hide_index=True,
-                                use_container_width=True
-                            )
-                            
-                            fig_cent = go.Figure(data=[
-                                go.Bar(
-                                    x=centrality['name'][:5],
-                                    y=centrality['connections'][:5],
-                                    marker_color='#FF4B4B'
-                                )
-                            ])
-                            fig_cent.update_layout(
-                                title="Top 5 - Connexions",
-                                template='plotly_dark',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                height=300,
-                                showlegend=False
-                            )
-                            st.plotly_chart(fig_cent, use_container_width=True)
+                    plt.close(fig)
 
             except Exception as e:
                 st.error(f"❌ Erreur d'analyse : {e}")
