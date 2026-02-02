@@ -1,0 +1,49 @@
+/* ===== HERO SECTION ===== */
+.hero {
+    padding: 3rem 2rem;
+    margin-bottom: 2rem;
+    border-radius: 24px;
+    background: linear-gradient(
+        135deg,
+        rgba(0,255,133,0.08),
+        rgba(0,217,255,0.05)
+    );
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.hero-title {
+    font-size: 3.5rem;
+    font-weight: 900;
+    background: linear-gradient(90deg, #00FF85, #00D9FF);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.hero-subtitle {
+    color: #A0A0A0;
+    font-size: 1.1rem;
+    margin-top: 0.5rem;
+}
+
+/* ===== VISUALISATION CONTAINER ===== */
+.viz-container {
+    padding: 1.5rem;
+    border-radius: 24px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ===== SIDEBAR ===== */
+section[data-testid="stSidebar"] {
+    width: 320px !important;
+    background: linear-gradient(
+        180deg,
+        rgba(14,17,23,0.98),
+        rgba(14,17,23,0.90)
+    );
+}
+
+/* ===== SPACING ===== */
+.section {
+    height: 48px;
+}
