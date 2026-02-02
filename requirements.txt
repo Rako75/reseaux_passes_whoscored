@@ -1,0 +1,10 @@
+streamlit
+pandas
+matplotlib
+mplsoccer
+selenium
+webdriver-manager
+beautifulsoup4
+requests
+Pillow
+numpy
