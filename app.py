@@ -44,21 +44,21 @@ st.markdown("""
     }
     .stButton>button {
         width: 100%;
-        background-color: #FF4B4B;
-        color: white;
-        border-radius: 5px;
+        border-radius: 8px;
         font-weight: bold;
-    }
-    .stButton>button:hover {
-        background-color: #FF2B2B;
-        border-color: white;
+        height: 3em;
     }
     /* Style des métriques */
     div[data-testid="metric-container"] {
         background-color: #1E1E1E;
-        padding: 10px;
+        padding: 15px;
         border-radius: 8px;
         border: 1px solid #333;
+    }
+    /* Messages */
+    .stAlert {
+        background-color: #1E1E1E;
+        color: white;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -107,7 +107,7 @@ def load_match_list():
             
             if url:
                 # Estimation de la journée (Gameweek) basée sur l'index grossier
-                # (Ou parsing plus fin si le fichier texte contient "Gameweek X")
+                # On suppose 10 matchs par journée
                 gameweek = (len(matches) // 10) + 1 
                 matches.append({
                     'id': mid, 
@@ -119,7 +119,7 @@ def load_match_list():
         i += 1
     return matches
 
-# --- CLASSES DE LOGIQUE MÉTIER (Adaptées pour Streamlit) ---
+# --- CLASSES DE LOGIQUE MÉTIER ---
 
 class StreamlitDownloader:
     """Téléchargeur optimisé pour Streamlit Cloud (Chromium system)"""
@@ -150,13 +150,13 @@ class StreamlitDownloader:
         try:
             driver = webdriver.Chrome(service=service, options=options)
             
-            with st.spinner(f"📥 Téléchargement des données tactiques depuis WhoScored..."):
+            with st.spinner(f"📥 Récupération des données tactiques..."):
                 driver.get(url)
-                time.sleep(5) # Attente JS
+                time.sleep(4) # Attente JS
                 
                 content = driver.page_source
                 if "Incapsula" in content:
-                    st.warning("⚠️ Protection anti-bot détectée. Nouvelle tentative...")
+                    st.warning("⚠️ Protection détectée. Nouvelle tentative...")
                     time.sleep(10)
                     content = driver.page_source
                 
@@ -206,18 +206,19 @@ class MatchParser:
         
         # Équipes & Formations
         fmt_divs = self.soup.find_all('div', class_='formation')
-        formations = [d.get_text(strip=True) for d in fmt_divs]
+        home_fmt = fmt_divs[0].get_text(strip=True) if len(fmt_divs) > 0 else 'N/A'
+        away_fmt = fmt_divs[1].get_text(strip=True) if len(fmt_divs) > 1 else 'N/A'
         
         teams = {
             'home': {
                 'id': mc['home']['teamId'], 'name': mc['home']['name'],
                 'manager': mc['home'].get('managerName', ''),
-                'formation': formations[0] if len(formations) > 0 else 'N/A'
+                'formation': home_fmt
             },
             'away': {
                 'id': mc['away']['teamId'], 'name': mc['away']['name'],
                 'manager': mc['away'].get('managerName', ''),
-                'formation': formations[1] if len(formations) > 1 else 'N/A'
+                'formation': away_fmt
             }
         }
         
@@ -227,7 +228,9 @@ class MatchParser:
         for i, emblem in enumerate(emblems[:2]):
             img = emblem.find('img')
             if img and img.get('src'):
-                logos[i] = img['src'].replace('http:', 'https:') if img['src'].startswith('//') else img['src']
+                url = img['src']
+                if url.startswith('//'): url = 'https:' + url
+                logos[i] = url
 
         return mc, match_info, teams, logos
 
@@ -260,12 +263,12 @@ class PassNetworkEngine:
         starters = players[(players['teamId'] == team_id) & (players['isFirstEleven'] == True)]
         starter_ids = starters['playerId'].unique()
         
-        # Positions
+        # Positions moyennes
         team_events = events[(events['teamId'] == team_id) & (events['playerId'].isin(starter_ids))]
         avg_locs = team_events.groupby('playerId').agg({'x':'mean', 'y':'mean', 'id':'count'}).rename(columns={'id':'count'})
         avg_locs = avg_locs.merge(players[['playerId', 'name', 'shirtNo', 'position']], on='playerId')
         
-        # Passes
+        # Passes entre titulaires uniquement
         passes = team_events[(team_events['type'] == 'Pass') & (team_events['outcomeType'] == 'Successful') & (team_events['receiverId'].isin(starter_ids))].copy()
         passes['pair'] = passes.apply(lambda r: tuple(sorted([r['playerId'], r['receiverId']])), axis=1)
         pass_counts = passes.groupby('pair').size().reset_index(name='pass_count')
@@ -274,6 +277,7 @@ class PassNetworkEngine:
         network = []
         for _, row in pass_counts.iterrows():
             p1, p2 = row['pair']
+            # Vérification de sécurité
             if p1 in avg_locs['playerId'].values and p2 in avg_locs['playerId'].values:
                 l1 = avg_locs[avg_locs['playerId'] == p1].iloc[0]
                 l2 = avg_locs[avg_locs['playerId'] == p2].iloc[0]
@@ -302,18 +306,25 @@ class DashboardVisualizer:
         
         # Score
         ax_h.text(0.5, 0.5, match_info['score'].replace(' : ', '-'), ha='center', va='center', fontsize=60, color='white', weight='bold', fontproperties=FONT_PROP)
+        
+        # Noms
         ax_h.text(0.35, 0.65, teams['home']['name'].upper(), ha='right', fontsize=30, color=STYLE['home'], weight='bold', fontproperties=FONT_PROP)
         ax_h.text(0.65, 0.65, teams['away']['name'].upper(), ha='left', fontsize=30, color=STYLE['away'], weight='bold', fontproperties=FONT_PROP)
         
+        # Managers & Formations
+        ax_h.text(0.35, 0.35, f"{teams['home']['manager']} ({teams['home']['formation']})", ha='right', fontsize=14, color=STYLE['sub'], fontproperties=FONT_PROP)
+        ax_h.text(0.65, 0.35, f"{teams['away']['manager']} ({teams['away']['formation']})", ha='left', fontsize=14, color=STYLE['sub'], fontproperties=FONT_PROP)
+
         # Logos via URL
         def add_logo(url, x_pos):
             try:
                 if url:
-                    resp = requests.get(url, stream=True)
-                    img = Image.open(BytesIO(resp.content))
-                    im = OffsetImage(img, zoom=0.8)
-                    ab = AnnotationBbox(im, (x_pos, 0.5), frameon=False, xycoords='axes fraction')
-                    ax_h.add_artist(ab)
+                    resp = requests.get(url, stream=True, headers={'User-Agent': 'Mozilla/5.0'})
+                    if resp.status_code == 200:
+                        img = Image.open(BytesIO(resp.content))
+                        im = OffsetImage(img, zoom=0.8)
+                        ab = AnnotationBbox(im, (x_pos, 0.5), frameon=False, xycoords='axes fraction')
+                        ax_h.add_artist(ab)
             except: pass
             
         add_logo(home_logo_url, 0.10)
@@ -349,139 +360,7 @@ class DashboardVisualizer:
         ax_arrow.arrow(0.5, 0.1, 0, 0.8, fc='white', ec='white', width=0.05, head_width=0.3, head_length=0.1)
         ax_arrow.text(0.5, 0.05, "Attaque", ha='center', color='white', fontproperties=FONT_PROP)
         
-        plt.tight_layout()
-        return fig
-
-# --- INTERFACE UTILISATEUR PRINCIPALE ---
-
-def main():
-    st.title("⚽ Premier League Dashboard 2025-2026")
-    st.markdown("---")
-
-    # Sidebar Navigation
-    st.sidebar.header("Options de Configuration")
-    mode = st.sidebar.radio("Mode de Sélection", ["📅 Calendrier / Journées", "🌐 URL Personnalisée"])
-
-    selected_match_data = None
-    needs_download = False
-    
-    # 1. LOGIQUE DE SÉLECTION
-    if mode == "📅 Calendrier / Journées":
-        matches = load_match_list()
-        
-        if not matches:
-            st.error(f"Fichier '{URLS_FILE}' introuvable ou vide.")
-        else:
-            # Filtre par Journée (Gameweek)
-            df_matches = pd.DataFrame(matches)
-            gameweeks = sorted(df_matches['gameweek'].unique())
-            
-            sel_gw = st.sidebar.selectbox("Choisir la Journée (GW)", gameweeks)
-            
-            gw_matches = df_matches[df_matches['gameweek'] == sel_gw]
-            match_options = {f"{r['title']} (Match #{r['id']})": r for _, r in gw_matches.iterrows()}
-            
-            sel_match_key = st.sidebar.selectbox("Choisir le Match", list(match_options.keys()))
-            selected_match_data = match_options[sel_match_key]
-            
-            # Vérification disponibilité locale
-            file_path = os.path.join(DATA_FOLDER, selected_match_data['filename'])
-            if os.path.exists(file_path):
-                st.sidebar.success("✅ Match disponible en local")
-                needs_download = False
-            else:
-                st.sidebar.warning("☁️ Match en ligne (non téléchargé)")
-                needs_download = True
-
-    elif mode == "🌐 URL Personnalisée":
-        url_input = st.sidebar.text_input("Coller l'URL WhoScored (Match Centre)")
-        if url_input:
-            match_id = re.search(r'/matches/(\d+)/', url_input)
-            if match_id:
-                mid = match_id.group(1)
-                selected_match_data = {
-                    'id': mid,
-                    'title': f"Match Personnalisé {mid}",
-                    'url': url_input,
-                    'filename': f"{mid}.html"
-                }
-                file_path = os.path.join(DATA_FOLDER, selected_match_data['filename'])
-                if os.path.exists(file_path):
-                    st.sidebar.success("✅ Match disponible en local")
-                else:
-                    needs_download = True
-            else:
-                st.sidebar.error("URL invalide. Doit contenir '/matches/ID/'")
-
-    # 2. LOGIQUE D'AFFICHAGE ET TÉLÉCHARGEMENT
-    if selected_match_data:
-        st.header(f"{selected_match_data['title']}")
-        
-        if needs_download:
-            st.info(f"Ce match (ID: {selected_match_data['id']}) n'est pas présent dans vos fichiers locaux.")
-            if st.button("🚀 Télécharger les données et Analyser", type="primary"):
-                downloader = StreamlitDownloader()
-                success = downloader.download_match(selected_match_data['url'], selected_match_data['filename'])
-                if success:
-                    st.success("Téléchargement terminé ! Rechargement...")
-                    st.rerun()
-                else:
-                    st.error("Échec du téléchargement. Vérifiez l'URL ou réessayez.")
-        else:
-            # Le fichier existe, on lance l'analyse
-            file_path = os.path.join(DATA_FOLDER, selected_match_data['filename'])
-            
-            try:
-                # Parsing
-                parser = MatchParser(file_path)
-                mc, match_info, teams, logos = parser.get_all_data()
-                
-                # Processing
-                engine = PassNetworkEngine()
-                events, players = engine.process(mc)
-                
-                home_net, home_nodes = engine.get_network(teams['home']['id'], events, players)
-                away_net, away_nodes = engine.get_network(teams['away']['id'], events, players)
-                
-                # Tabs pour organiser l'affichage
-                tab1, tab2 = st.tabs(["📊 Dashboard Global", "📈 Stats Brutes"])
-                
-                with tab1:
-                    with st.spinner("Génération du graphique tactique..."):
-                        viz = DashboardVisualizer()
-                        fig = viz.create_dashboard(
-                            match_info, teams, 
-                            home_net, home_nodes, 
-                            away_net, away_nodes, 
-                            logos.get(0), logos.get(1)
-                        )
-                        st.pyplot(fig)
-                        plt.close(fig) # Cleanup mémoire
-                        
-                        # Bouton de téléchargement de l'image
-                        buf = BytesIO()
-                        fig.savefig(buf, format="png", facecolor='#0E1117', bbox_inches='tight')
-                        st.download_button(
-                            label="💾 Sauvegarder l'image",
-                            data=buf.getvalue(),
-                            file_name=f"dashboard_{selected_match_data['id']}.png",
-                            mime="image/png"
-                        )
-
-                with tab2:
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.subheader(teams['home']['name'])
-                        st.dataframe(home_nodes[['name', 'shirtNo', 'count']].sort_values('count', ascending=False).head(10))
-                    with col2:
-                        st.subheader(teams['away']['name'])
-                        st.dataframe(away_nodes[['name', 'shirtNo', 'count']].sort_values('count', ascending=False).head(10))
-                        
-            except Exception as e:
-                st.error(f"Une erreur est survenue lors de l'analyse : {e}")
-                st.info("Le fichier HTML est peut-être corrompu ou le format a changé.")
-    else:
-        st.info("👈 Sélectionnez un match dans la barre latérale pour commencer.")
-
-if __name__ == "__main__":
-    main()
+        # Légende
+        ax_legend = fig.add_subplot(gs[1, :])
+        ax_legend.axis('off')
+        ax_legend.text(0.5, 0.5,
