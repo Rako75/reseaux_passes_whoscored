@@ -61,481 +61,495 @@ PREMIER_LEAGUE_CLUBS = {
 # --- STYLE CSS ULTRA MODERNE ---
 # Remplacez la section CSS (ligne ~66-280) par ce code amélioré :
 
+# Remplacez la section CSS (ligne ~66-280) par ce design minimaliste professionnel :
+
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=Space+Grotesk:wght@700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
-    /* ========== FOND & STRUCTURE GLOBALE ========== */
+    /* ========== BASE MINIMALISTE ========== */
     .stApp {
-        background: #0a0e27;
-        background-image: 
-            radial-gradient(at 0% 0%, rgba(56, 0, 60, 0.3) 0px, transparent 50%),
-            radial-gradient(at 100% 0%, rgba(0, 84, 166, 0.2) 0px, transparent 50%),
-            radial-gradient(at 100% 100%, rgba(56, 0, 60, 0.3) 0px, transparent 50%),
-            radial-gradient(at 0% 100%, rgba(0, 84, 166, 0.2) 0px, transparent 50%);
-        font-family: 'Inter', sans-serif;
+        background: #ffffff;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #1a1a1a;
     }
     
-    /* ========== TYPOGRAPHIE AVANCÉE ========== */
+    /* ========== TYPOGRAPHIE CLEAN ========== */
     h1 {
-        font-family: 'Space Grotesk', sans-serif !important;
-        background: linear-gradient(135deg, #00ff87 0%, #60efff 50%, #00ff87 100%);
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        font-weight: 900 !important;
-        letter-spacing: -2px;
-        font-size: 4rem !important;
+        color: #1a1a1a !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.02em;
+        font-size: 2.5rem !important;
         margin-bottom: 0.5rem !important;
-        text-shadow: 0 0 80px rgba(0, 255, 135, 0.3);
-        animation: gradient-shift 8s ease infinite;
-    }
-    
-    @keyframes gradient-shift {
-        0%, 100% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
+        line-height: 1.2;
     }
     
     h2 {
-        color: #FFFFFF !important;
-        font-weight: 700 !important;
-        font-size: 2.2rem !important;
-        border-left: 5px solid #00ff87;
-        padding-left: 1.2rem;
-        margin-top: 2.5rem !important;
-        margin-bottom: 1.5rem !important;
-        position: relative;
-    }
-    
-    h2::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 5px;
-        height: 100%;
-        background: linear-gradient(180deg, #00ff87, #60efff);
-        box-shadow: 0 0 20px rgba(0, 255, 135, 0.5);
+        color: #1a1a1a !important;
+        font-weight: 600 !important;
+        font-size: 1.5rem !important;
+        margin-top: 3rem !important;
+        margin-bottom: 1rem !important;
+        letter-spacing: -0.01em;
     }
     
     h3 {
-        color: #e0e0e0 !important;
+        color: #4a4a4a !important;
         font-weight: 600 !important;
-        font-size: 1.4rem !important;
-        margin-bottom: 1rem !important;
+        font-size: 1.1rem !important;
+        margin-bottom: 0.75rem !important;
     }
     
     p, .stMarkdown {
-        color: #b8b8b8;
-        line-height: 1.7;
+        color: #6a6a6a;
+        line-height: 1.6;
+        font-weight: 400;
     }
     
-    /* ========== CARTES ULTRA MODERNES (GLASSMORPHISM 2.0) ========== */
+    /* ========== CARTES MINIMALISTES ========== */
     .stat-card {
-        background: rgba(255, 255, 255, 0.02);
-        backdrop-filter: blur(20px) saturate(180%);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 20px;
-        padding: 2rem;
-        margin: 1rem 0;
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .stat-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(0, 255, 135, 0.5), transparent);
+        background: #ffffff;
+        border: 1px solid #e8e8e8;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin: 0.75rem 0;
+        transition: all 0.2s ease;
     }
     
     .stat-card:hover {
-        background: rgba(255, 255, 255, 0.04);
-        border-color: rgba(0, 255, 135, 0.3);
-        transform: translateY(-5px) scale(1.01);
-        box-shadow: 
-            0 20px 60px rgba(0, 255, 135, 0.15),
-            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        border-color: #1a1a1a;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     }
     
     .stat-value {
-        font-size: 3rem;
-        font-weight: 900;
-        background: linear-gradient(135deg, #00ff87 0%, #60efff 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        line-height: 1.1;
-        font-family: 'Space Grotesk', sans-serif;
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #1a1a1a;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
     }
     
     .stat-label {
-        color: #888;
-        font-size: 0.9rem;
+        color: #8a8a8a;
+        font-size: 0.75rem;
         text-transform: uppercase;
-        letter-spacing: 2px;
-        font-weight: 700;
-        margin-top: 0.5rem;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+        margin-top: 0.25rem;
     }
     
-    /* ========== BOUTONS PREMIUM 3D ========== */
+    /* ========== BOUTONS PROFESSIONNELS ========== */
     .stButton>button {
         width: 100%;
-        background: linear-gradient(135deg, #38003c 0%, #00ff87 100%);
-        color: #000;
+        background: #1a1a1a;
+        color: #ffffff;
         border: none;
-        border-radius: 16px;
-        font-weight: 800;
-        font-size: 1.1rem;
-        padding: 1rem 2rem;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        box-shadow: 
-            0 10px 40px rgba(0, 255, 135, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.2);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .stButton>button::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-        transition: left 0.5s;
-    }
-    
-    .stButton>button:hover::before {
-        left: 100%;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        padding: 0.75rem 1.5rem;
+        transition: all 0.2s ease;
+        letter-spacing: 0.01em;
     }
     
     .stButton>button:hover {
-        background: linear-gradient(135deg, #00ff87 0%, #60efff 100%);
-        transform: translateY(-3px) scale(1.02);
-        box-shadow: 
-            0 20px 60px rgba(0, 255, 135, 0.5),
-            inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        background: #000000;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
     
     .stButton>button:active {
-        transform: translateY(-1px) scale(0.98);
+        transform: translateY(0);
     }
     
-    /* ========== SIDEBAR PREMIUM ========== */
+    /* ========== SIDEBAR ÉPURÉE ========== */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, rgba(10, 14, 39, 0.95) 0%, rgba(26, 31, 46, 0.95) 100%);
-        backdrop-filter: blur(20px);
-        border-right: 1px solid rgba(0, 255, 135, 0.1);
+        background: #fafafa;
+        border-right: 1px solid #e8e8e8;
     }
     
     [data-testid="stSidebar"] h2 {
-        border-left-color: #60efff;
+        color: #1a1a1a !important;
     }
     
-    [data-testid="stSidebar"] h2::before {
-        background: linear-gradient(180deg, #60efff, #00ff87);
-        box-shadow: 0 0 20px rgba(96, 239, 255, 0.5);
+    [data-testid="stSidebar"] .stMarkdown {
+        color: #6a6a6a;
     }
     
-    /* ========== TABS FUTURISTES ========== */
+    /* ========== TABS MINIMALISTES ========== */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 12px;
-        background: rgba(255, 255, 255, 0.02);
-        padding: 8px;
-        border-radius: 16px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        gap: 0;
+        background: transparent;
+        border-bottom: 1px solid #e8e8e8;
     }
     
     .stTabs [data-baseweb="tab"] {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        color: #888;
-        font-weight: 700;
-        padding: 0.75rem 2rem;
-        transition: all 0.3s ease;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        color: #8a8a8a;
+        font-weight: 600;
+        padding: 0.75rem 1.5rem;
         font-size: 0.9rem;
+        transition: all 0.2s ease;
     }
     
     .stTabs [data-baseweb="tab"]:hover {
-        background: rgba(255, 255, 255, 0.05);
-        border-color: rgba(0, 255, 135, 0.3);
+        color: #1a1a1a;
+        background: #fafafa;
     }
     
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #00ff87 0%, #60efff 100%) !important;
-        color: #000 !important;
-        border-color: transparent !important;
-        box-shadow: 0 8px 32px rgba(0, 255, 135, 0.4);
+        color: #1a1a1a !important;
+        border-bottom-color: #1a1a1a !important;
+        background: transparent !important;
     }
     
     /* ========== MÉTRIQUES STREAMLIT ========== */
     [data-testid="stMetricValue"] {
-        font-size: 2.5rem;
-        font-weight: 900;
-        background: linear-gradient(135deg, #00ff87 0%, #60efff 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-family: 'Space Grotesk', sans-serif;
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1a1a1a;
+        letter-spacing: -0.02em;
     }
     
     [data-testid="stMetricLabel"] {
-        color: #888 !important;
-        font-weight: 700;
+        color: #8a8a8a !important;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.05em;
+        font-size: 0.75rem;
+    }
+    
+    [data-testid="stMetricDelta"] {
         font-size: 0.85rem;
     }
     
-    /* ========== SELECTBOX & INPUTS ========== */
-    .stSelectbox > div > div {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        color: white;
-        transition: all 0.3s ease;
-    }
-    
-    .stSelectbox > div > div:hover {
-        border-color: rgba(0, 255, 135, 0.3);
-        background: rgba(255, 255, 255, 0.05);
-    }
-    
+    /* ========== INPUTS CLEAN ========== */
+    .stSelectbox > div > div,
     .stTextInput > div > div {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        color: white;
+        background: #ffffff;
+        border: 1px solid #e8e8e8;
+        border-radius: 6px;
+        color: #1a1a1a;
+        transition: all 0.2s ease;
+        font-weight: 500;
     }
     
+    .stSelectbox > div > div:hover,
+    .stTextInput > div > div:hover {
+        border-color: #1a1a1a;
+    }
+    
+    .stSelectbox > div > div:focus-within,
     .stTextInput > div > div:focus-within {
-        border-color: #00ff87;
-        box-shadow: 0 0 20px rgba(0, 255, 135, 0.2);
+        border-color: #1a1a1a;
+        box-shadow: 0 0 0 1px #1a1a1a;
     }
     
     /* ========== RADIO BUTTONS ========== */
     .stRadio > div {
-        background: rgba(255, 255, 255, 0.02);
-        padding: 1rem;
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: transparent;
+        padding: 0;
     }
     
     .stRadio label {
-        color: #e0e0e0 !important;
-        font-weight: 600;
+        color: #1a1a1a !important;
+        font-weight: 500;
+        padding: 0.5rem 0;
     }
     
-    /* ========== EXPANDER ========== */
+    .stRadio [role="radiogroup"] label:hover {
+        background: #fafafa;
+    }
+    
+    /* ========== EXPANDER MINIMAL ========== */
     .streamlit-expanderHeader {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        font-weight: 700;
-        color: white !important;
-        transition: all 0.3s ease;
+        background: #fafafa;
+        border: 1px solid #e8e8e8;
+        border-radius: 6px;
+        font-weight: 600;
+        color: #1a1a1a !important;
+        transition: all 0.2s ease;
     }
     
     .streamlit-expanderHeader:hover {
-        background: rgba(255, 255, 255, 0.05);
-        border-color: rgba(0, 255, 135, 0.3);
+        background: #f0f0f0;
+        border-color: #1a1a1a;
     }
     
-    /* ========== MESSAGES D'ALERTE ========== */
+    /* ========== ALERTES PROPRES ========== */
     .stAlert {
-        background: rgba(255, 255, 255, 0.03);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
-        color: white;
-        border-left: 4px solid #00ff87;
+        background: #fafafa;
+        border: 1px solid #e8e8e8;
+        border-radius: 6px;
+        color: #1a1a1a;
+        border-left-width: 3px;
     }
     
     .stSuccess {
-        border-left-color: #00ff87 !important;
-        background: rgba(0, 255, 135, 0.05) !important;
+        border-left-color: #22c55e !important;
+        background: #f0fdf4 !important;
     }
     
     .stError {
-        border-left-color: #ff4b4b !important;
-        background: rgba(255, 75, 75, 0.05) !important;
+        border-left-color: #ef4444 !important;
+        background: #fef2f2 !important;
     }
     
     .stWarning {
-        border-left-color: #ffa500 !important;
-        background: rgba(255, 165, 0, 0.05) !important;
+        border-left-color: #f59e0b !important;
+        background: #fffbeb !important;
     }
     
     .stInfo {
-        border-left-color: #60efff !important;
-        background: rgba(96, 239, 255, 0.05) !important;
+        border-left-color: #3b82f6 !important;
+        background: #eff6ff !important;
     }
     
     /* ========== DATAFRAMES ========== */
     .dataframe {
-        background: rgba(255, 255, 255, 0.02) !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-radius: 16px !important;
-        overflow: hidden;
+        background: #ffffff !important;
+        border: 1px solid #e8e8e8 !important;
+        border-radius: 6px !important;
+        font-size: 0.9rem;
     }
     
     .dataframe thead tr th {
-        background: rgba(0, 255, 135, 0.1) !important;
-        color: #00ff87 !important;
-        font-weight: 700 !important;
+        background: #fafafa !important;
+        color: #1a1a1a !important;
+        font-weight: 600 !important;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+        font-size: 0.75rem;
+        border-bottom: 1px solid #e8e8e8 !important;
+    }
+    
+    .dataframe tbody tr {
+        border-bottom: 1px solid #f0f0f0 !important;
     }
     
     .dataframe tbody tr:hover {
-        background: rgba(0, 255, 135, 0.05) !important;
+        background: #fafafa !important;
     }
     
-    /* ========== SCROLLBAR ÉLÉGANTE ========== */
+    /* ========== SCROLLBAR MINIMAL ========== */
     ::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
+        width: 8px;
+        height: 8px;
     }
     
     ::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.02);
-        border-radius: 10px;
+        background: #fafafa;
     }
     
     ::-webkit-scrollbar-thumb {
-        background: linear-gradient(180deg, #00ff87, #60efff);
-        border-radius: 10px;
-        border: 2px solid rgba(10, 14, 39, 0.5);
+        background: #d0d0d0;
+        border-radius: 4px;
     }
     
     ::-webkit-scrollbar-thumb:hover {
-        background: linear-gradient(180deg, #60efff, #00ff87);
-        box-shadow: 0 0 20px rgba(0, 255, 135, 0.5);
+        background: #1a1a1a;
     }
     
     /* ========== BADGE PREMIUM ========== */
     .premium-badge {
         display: inline-block;
-        background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
-        color: #000;
-        padding: 0.3rem 1rem;
-        border-radius: 25px;
-        font-size: 0.8rem;
-        font-weight: 900;
+        background: #1a1a1a;
+        color: #ffffff;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-left: 1rem;
-        box-shadow: 
-            0 4px 20px rgba(255, 215, 0, 0.4),
-            inset 0 1px 0 rgba(255, 255, 255, 0.5);
-        animation: pulse-badge 3s ease-in-out infinite;
+        letter-spacing: 0.05em;
+        margin-left: 0.75rem;
+        vertical-align: middle;
     }
     
-    @keyframes pulse-badge {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-    }
-    
-    /* ========== LOGOS CLUBS ========== */
+    /* ========== LOGOS CLUBS SUBTLE ========== */
     .club-logo {
-        width: 45px;
-        height: 45px;
-        opacity: 0.5;
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        filter: grayscale(70%) brightness(0.8);
-        cursor: pointer;
+        width: 40px;
+        height: 40px;
+        opacity: 0.4;
+        transition: opacity 0.2s ease;
+        filter: grayscale(100%);
     }
     
     .club-logo:hover {
         opacity: 1;
-        transform: scale(1.3) rotate(5deg);
-        filter: grayscale(0%) brightness(1.2);
-        box-shadow: 0 8px 32px rgba(0, 255, 135, 0.3);
+        filter: grayscale(0%);
     }
     
-    /* ========== SPINNER DE CHARGEMENT ========== */
+    /* ========== SPINNER ========== */
     .stSpinner > div {
-        border-top-color: #00ff87 !important;
-        border-right-color: #60efff !important;
+        border-top-color: #1a1a1a !important;
+        border-right-color: #1a1a1a !important;
     }
     
     /* ========== DIVIDERS ========== */
     hr {
-        margin: 3rem 0;
+        margin: 2.5rem 0;
         border: none;
         height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(0, 255, 135, 0.3), transparent);
+        background: #e8e8e8;
     }
     
     /* ========== DOWNLOAD BUTTON ========== */
     .stDownloadButton > button {
-        background: linear-gradient(135deg, #7b2cbf 0%, #c77dff 100%);
-        color: white;
-        border: none;
-        border-radius: 16px;
-        font-weight: 800;
-        padding: 1rem 2rem;
-        box-shadow: 0 10px 40px rgba(123, 44, 191, 0.3);
-        transition: all 0.3s ease;
+        background: #ffffff;
+        color: #1a1a1a;
+        border: 1px solid #1a1a1a;
+        border-radius: 6px;
+        font-weight: 600;
+        padding: 0.75rem 1.5rem;
+        transition: all 0.2s ease;
     }
     
     .stDownloadButton > button:hover {
-        background: linear-gradient(135deg, #c77dff 0%, #7b2cbf 100%);
-        transform: translateY(-3px);
-        box-shadow: 0 20px 60px rgba(123, 44, 191, 0.5);
+        background: #1a1a1a;
+        color: #ffffff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
     
-    /* ========== ANIMATION DE CHARGEMENT ========== */
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.4; }
+    /* ========== CONTAINERS ========== */
+    .element-container {
+        margin-bottom: 1rem;
     }
     
-    .loading {
-        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    /* ========== HEADERS CLEAN ========== */
+    header[data-testid="stHeader"] {
+        background: transparent;
     }
     
-    /* ========== GLOW EFFECTS ========== */
-    .glow-text {
-        text-shadow: 
-            0 0 10px rgba(0, 255, 135, 0.5),
-            0 0 20px rgba(0, 255, 135, 0.3),
-            0 0 30px rgba(0, 255, 135, 0.2);
+    /* ========== FOCUS STATES ========== */
+    *:focus-visible {
+        outline: 2px solid #1a1a1a;
+        outline-offset: 2px;
+    }
+    
+    /* ========== SELECTIONS ========== */
+    ::selection {
+        background: #1a1a1a;
+        color: #ffffff;
+    }
+    
+    /* ========== IMAGES ========== */
+    img {
+        border-radius: 4px;
     }
     
     /* ========== RESPONSIVE ========== */
     @media (max-width: 768px) {
         h1 {
-            font-size: 2.5rem !important;
-            letter-spacing: -1px;
+            font-size: 2rem !important;
         }
         
         h2 {
-            font-size: 1.8rem !important;
-        }
-        
-        .stat-card {
-            padding: 1.5rem;
+            font-size: 1.3rem !important;
         }
         
         .stat-value {
             font-size: 2rem;
         }
+        
+        .stButton>button {
+            padding: 0.65rem 1.25rem;
+        }
+    }
+    
+    /* ========== DARK MODE OVERRIDE (si activé) ========== */
+    @media (prefers-color-scheme: dark) {
+        .stApp {
+            background: #0a0a0a;
+            color: #e8e8e8;
+        }
+        
+        h1, h2 {
+            color: #ffffff !important;
+        }
+        
+        h3 {
+            color: #d0d0d0 !important;
+        }
+        
+        p, .stMarkdown {
+            color: #a0a0a0;
+        }
+        
+        .stat-card {
+            background: #1a1a1a;
+            border-color: #2a2a2a;
+        }
+        
+        .stat-card:hover {
+            border-color: #ffffff;
+        }
+        
+        .stat-value {
+            color: #ffffff;
+        }
+        
+        .stButton>button {
+            background: #ffffff;
+            color: #0a0a0a;
+        }
+        
+        .stButton>button:hover {
+            background: #e8e8e8;
+        }
+        
+        [data-testid="stSidebar"] {
+            background: #0f0f0f;
+            border-right-color: #2a2a2a;
+        }
+        
+        .stTabs [data-baseweb="tab-list"] {
+            border-bottom-color: #2a2a2a;
+        }
+        
+        .stTabs [aria-selected="true"] {
+            color: #ffffff !important;
+            border-bottom-color: #ffffff !important;
+        }
+        
+        .stSelectbox > div > div,
+        .stTextInput > div > div {
+            background: #1a1a1a;
+            border-color: #2a2a2a;
+            color: #e8e8e8;
+        }
+        
+        .dataframe {
+            background: #1a1a1a !important;
+            border-color: #2a2a2a !important;
+        }
+        
+        .dataframe thead tr th {
+            background: #0f0f0f !important;
+            color: #ffffff !important;
+        }
+        
+        hr {
+            background: #2a2a2a;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #0f0f0f;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #3a3a3a;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ffffff;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
-
 # --- FONCTIONS UTILITAIRES ---
 
 @st.cache_resource
