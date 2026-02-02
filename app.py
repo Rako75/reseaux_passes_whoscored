@@ -166,14 +166,19 @@ class StreamlitDownloader:
             
             with st.spinner(f"🌍 Connexion à WhoScored pour récupérer les données..."):
                 driver.get(url)
-                time.sleep(4) # Attente chargement initial
+                time.sleep(5) # Attente un peu plus longue
                 
                 # Gestion Anti-bot basique
                 content = driver.page_source
-                if "Incapsula" in content or "challenge" in content.lower():
+                if "Incapsula" in content or "challenge" in content.lower() or "Just a moment" in content:
                     st.warning("🛡️ Vérification de sécurité détectée, attente prolongée...")
-                    time.sleep(8)
+                    time.sleep(10)
                     content = driver.page_source
+                
+                # VÉRIFICATION CRITIQUE : Les données sont-elles là ?
+                if "require.config.params" not in content:
+                    st.error("❌ Échec : La page récupérée semble être une protection anti-robot (Captcha) et ne contient pas les données.")
+                    return False
                 
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(content)
@@ -205,9 +210,15 @@ class MatchParser:
             self.soup = BeautifulSoup(content, 'html.parser')
             
             # Extraction Regex du JSON de config
-            regex = r"require\.config\.params\[\"args\"\]\s*=\s*({.*?});"
+            # AMÉLIORATION : Support des guillemets simples OU doubles
+            regex = r"require\.config\.params\[[\"']args[\"']\]\s*=\s*({.*?});"
             match = re.search(regex, content, re.DOTALL)
-            if not match: raise ValueError("JSON de données introuvable dans le HTML")
+            
+            if not match: 
+                # Diagnostic plus précis pour l'utilisateur
+                if "Incapsula" in content or "challenge" in content or "Just a moment" in content:
+                     raise ValueError("Le fichier HTML est une page de protection Anti-Bot (Captcha), pas le match.")
+                raise ValueError("JSON de données introuvable dans le HTML (Format non reconnu)")
             
             json_str = match.group(1)
             # Nettoyage JS -> JSON standard
