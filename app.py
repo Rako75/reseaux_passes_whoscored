@@ -17,13 +17,6 @@ import shutil
 from io import BytesIO
 from datetime import datetime
 
-def load_css():
-    with open("styles.css") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-
-load_css()
-
-
 # --- CONFIGURATION DE LA PAGE (DESIGN) ---
 st.set_page_config(
     page_title="Premier League Analyst Pro • 2025/26",
@@ -956,17 +949,8 @@ class DashboardVisualizer:
 
 def main():
     # Header Design
-    st.markdown("""
-    <div class="hero">
-    <div class="hero-title">
-    ⚽ Premier League Analyst Pro <span class="premium-badge">2025/26</span>
-    </div>
-    <div class="hero-subtitle">
-    Analyse tactique avancée • Réseaux de passes • Données Opta
-    </div>
-    </div>
-""", unsafe_allow_html=True)
-
+    st.markdown('<h1>⚽ Premier League Analyst <span class="premium-badge">PRO</span></h1>', unsafe_allow_html=True)
+    st.markdown("*Analyse tactique avancée propulsée par l'IA et les données Opta*")
     
     display_club_logos() # Carousel
 
@@ -1050,10 +1034,7 @@ def main():
                     viz = DashboardVisualizer()
                     fig = viz.create_dashboard(match_info, teams, home_net, home_nodes, away_net, away_nodes, logos.get(0), logos.get(1))
                     
-                    st.markdown("<div class='viz-container'>", unsafe_allow_html=True)
                     st.pyplot(fig, use_container_width=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
-
                     
                     # Bouton de téléchargement
                     col1, col2, col3 = st.columns([1, 2, 1])
