@@ -956,15 +956,15 @@ class DashboardVisualizer:
 
 def main():
     # Header Design
-st.markdown("""
-<div class="hero">
-  <div class="hero-title">
+    st.markdown("""
+    <div class="hero">
+    <div class="hero-title">
     ⚽ Premier League Analyst Pro <span class="premium-badge">2025/26</span>
-  </div>
-  <div class="hero-subtitle">
+    </div>
+    <div class="hero-subtitle">
     Analyse tactique avancée • Réseaux de passes • Données Opta
-  </div>
-</div>
+    </div>
+    </div>
 """, unsafe_allow_html=True)
 
     
