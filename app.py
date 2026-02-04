@@ -633,11 +633,48 @@ class MegaDashboard:
 
     def _draw_xg_flow(self, ax, mins, h_xg, a_xg, shots, info):
         ax.set_facecolor(STYLE['background'])
-        ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
-        ax.spines['left'].set_color(STYLE['sub_text']); ax.spines['bottom'].set_color(STYLE['sub_text'])
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color(STYLE['sub_text'])
+        ax.spines['bottom'].set_color(STYLE['sub_text'])
         ax.tick_params(axis='both', colors='white')
+
         ax.step(mins, h_xg, where='post', color=STYLE['home_color'], linewidth=2, label='Home')
         ax.step(mins, a_xg, where='post', color=STYLE['away_color'], linewidth=2, label='Away')
+
+        goals = shots[shots['type_name'] == 'Goal'].sort_values('minute')
+
+        last_minute = -10
+        offset_level = 0
+        max_y = max(max(h_xg), max(a_xg)) if h_xg and a_xg else 1.0
+
+        for i, g in goals.iterrows():
+            minute = int(g['minute'])
+            idx = min(minute, len(h_xg)-1)
+
+            is_home = (g['teamId'] == info['home']['id'])
+            xg_val = h_xg[idx] if is_home else a_xg[idx]
+
+            player_name = g['name'] if 'name' in g and pd.notna(g['name']) else "But"
+            short_name = player_name.split()[-1] if player_name else "But"
+
+            label_text = f"{short_name} ({minute}')"
+
+            if minute - last_minute < 5:
+                offset_level = (offset_level + 1) % 4
+            else:
+                offset_level = 0
+
+            last_minute = minute
+            y_offset = (max_y * 0.1) + (offset_level * (max_y * 0.08))
+            if y_offset < 0.2: y_offset = 0.2 + (offset_level * 0.15)
+
+            ax.scatter(minute, xg_val, s=300, c='#FFD700', edgecolors='black', marker='*', zorder=21, linewidth=1)
+            ax.annotate(label_text, xy=(minute, xg_val), xytext=(minute, xg_val + y_offset),
+                        arrowprops=dict(arrowstyle="-", color=STYLE['sub_text'], lw=1),
+                        fontsize=10, ha='center', va='bottom', weight='bold',
+                        color=STYLE['text_color'], fontproperties=STYLE['font_prop'], zorder=25)
+
         ax.set_title("xG Flow", fontsize=14, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
         ax.grid(axis='y', linestyle='--', alpha=0.3)
 
