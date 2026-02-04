@@ -203,31 +203,55 @@ class MatchParser:
             content = f.read()
         self.soup = BeautifulSoup(content, 'html.parser')
         
-        # Regex robuste pour extraire le JSON
-        regex = r"require\.config\.params\[\"args\"\]\s*=\s*({.*?});"
-        match = re.search(regex, content, re.DOTALL)
+        # STRATÉGIE MULTI-REGEX (ordre de priorité)
+        patterns = [
+            # Pattern 1 : Standard WhoScored
+            r"require\.config\.params\[\"args\"\]\s*=\s*(\{.*?\});",
+            # Pattern 2 : Variable matchCentreData directe
+            r"var\s+matchCentreData\s*=\s*(\{.*?\});",
+            # Pattern 3 : Dans un objet global
+            r"matchCentreData:\s*(\{.*?\}),?\s*matchCentreEventTypeJson",
+            # Pattern 4 : Autre format possible
+            r"\"matchCentreData\":\s*(\{.*?\}),?\s*\"matchCentreEventTypeJson\""
+        ]
         
-        # Fallback si le regex standard échoue
-        if not match:
-             regex_alt = r"matchCentreData:\s*({.*?}),\s*matchCentreEventTypeJson"
-             match_alt = re.search(regex_alt, content, re.DOTALL)
-             if match_alt:
-                 json_str = match_alt.group(1)
-                 # On wrap pour correspondre à la structure attendue
-                 json_str = '{"matchCentreData": ' + json_str + '}'
-             else:
-                raise ValueError("JSON data not found via Regex")
-        else:
-            json_str = match.group(1)
+        json_str = None
+        for i, pattern in enumerate(patterns):
+            match = re.search(pattern, content, re.DOTALL)
+            if match:
+                json_str = match.group(1)
+                # Si c'est le pattern 3 ou 4, wrapper dans la structure attendue
+                if i >= 2:
+                    json_str = '{"matchCentreData": ' + json_str + '}'
+                break
+        
+        if not json_str:
+            # DERNIER RECOURS : Recherche de tout objet contenant "events" et "home"
+            fallback = re.search(r'(\{[^{}]*"events"\s*:\s*\[[^]]*\][^{}]*"home"\s*:\s*\{.*?\})', content, re.DOTALL)
+            if fallback:
+                json_str = '{"matchCentreData": ' + fallback.group(1) + '}'
+            else:
+                # Sauvegarde du HTML pour debug
+                debug_path = self.html_path.replace('.html', '_DEBUG.html')
+                with open(debug_path, 'w', encoding='utf-8') as f:
+                    f.write(content[:50000])  # Premiers 50k chars
+                raise ValueError(f"❌ JSON data not found. Saved debug file: {debug_path}")
 
-        # Nettoyage JSON JS -> Python
-        json_str = json_str.replace('matchId', '"matchId"') \
-                           .replace('matchCentreData', '"matchCentreData"') \
-                           .replace('matchCentreEventTypeJson', '"matchCentreEventTypeJson"') \
-                           .replace('formationIdNameMappings', '"formationIdNameMappings"')
+        # Nettoyage JSON JavaScript -> Python
+        # Remplace les clés non quotées courantes
+        json_str = re.sub(r'(\w+):', r'"\1":', json_str)  # Toutes les clés
+        json_str = json_str.replace("'", '"')  # Guillemets simples -> doubles
         
-        # Nettoyage supplémentaire des clés non citées si nécessaire (simple)
-        return json.loads(json_str)
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            # Si échec, essayer de nettoyer davantage
+            json_str = re.sub(r',\s*}', '}', json_str)  # Virgules avant }
+            json_str = re.sub(r',\s*]', ']', json_str)  # Virgules avant ]
+            try:
+                return json.loads(json_str)
+            except:
+                raise ValueError(f"❌ JSON parsing failed: {str(e)[:200]}")
 
     def get_match_info(self):
         home_fmt, away_fmt = 'N/A', 'N/A'
