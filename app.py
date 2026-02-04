@@ -122,19 +122,34 @@ class StreamlitDownloader:
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
         from selenium.webdriver.chrome.service import Service
-        from webdriver_manager.chrome import ChromeDriverManager
         
         filepath = os.path.join(DATA_FOLDER, filename)
         options = Options()
         options.add_argument("--headless=new")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         
+        driver = None
+        
+        # 1. Tentative avec Selenium Manager natif (Recommandé pour Chrome récents > 114)
         try:
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=options)
-            
+            driver = webdriver.Chrome(options=options)
+        except Exception as e_native:
+            # 2. Fallback avec webdriver_manager si le natif échoue
+            try:
+                from webdriver_manager.chrome import ChromeDriverManager
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=options)
+            except Exception as e_manager:
+                st.error(f"❌ Erreur Driver : Impossible d'initialiser Chrome.\nNative Error: {e_native}\nManager Error: {e_manager}")
+                return False
+
+        if not driver:
+             return False
+
+        try:
             with st.spinner(f"🌍 Connexion à WhoScored : {url}"):
                 driver.get(url)
                 time.sleep(5)
@@ -149,11 +164,16 @@ class StreamlitDownloader:
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(content)
             
-            driver.quit()
             return True
         except Exception as e:
-            st.error(f"❌ Erreur Selenium : {str(e)}")
+            st.error(f"❌ Erreur Selenium pendant le téléchargement : {str(e)}")
             return False
+        finally:
+            if driver:
+                try:
+                    driver.quit()
+                except:
+                    pass
 
 class MatchParser:
     def __init__(self, html_path):
