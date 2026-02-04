@@ -3,8 +3,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib.colors import to_rgba, LinearSegmentedColormap
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import matplotlib.font_manager as fm
+from matplotlib.lines import Line2D
 from mplsoccer import VerticalPitch, Pitch
 from bs4 import BeautifulSoup
 from PIL import Image
@@ -14,1068 +16,660 @@ import json
 import time
 import requests
 import shutil
+import warnings
 from io import BytesIO
-from datetime import datetime
 
-# --- CONFIGURATION DE LA PAGE (DESIGN) ---
+# --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Premier League Analyst Pro • 2025/26",
+    page_title="Premier League Mega Dashboard • 2025/26",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- CONSTANTES ---
+# --- CONSTANTES & PATHS ---
 DATA_FOLDER = "premier_league_data_2025_2026"
 URLS_FILE = "whoscored_urls_premierleague.txt"
-FONT_PATH = "Montserrat-Regular.ttf"
+CUSTOM_FONT_PATH = "Montserrat-Regular.ttf"
 
-# Création du dossier data s'il n'existe pas
 if not os.path.exists(DATA_FOLDER):
     os.makedirs(DATA_FOLDER)
 
-# --- LOGOS DES CLUBS PREMIER LEAGUE ---
-PREMIER_LEAGUE_CLUBS = {
-    'Arsenal': 'https://resources.premierleague.com/premierleague/badges/50/t3.png',
-    'Aston Villa': 'https://resources.premierleague.com/premierleague/badges/50/t7.png',
-    'Bournemouth': 'https://resources.premierleague.com/premierleague/badges/50/t91.png',
-    'Brentford': 'https://resources.premierleague.com/premierleague/badges/50/t94.png',
-    'Brighton': 'https://resources.premierleague.com/premierleague/badges/50/t36.png',
-    'Chelsea': 'https://resources.premierleague.com/premierleague/badges/50/t8.png',
-    'Crystal Palace': 'https://resources.premierleague.com/premierleague/badges/50/t31.png',
-    'Everton': 'https://resources.premierleague.com/premierleague/badges/50/t11.png',
-    'Fulham': 'https://resources.premierleague.com/premierleague/badges/50/t54.png',
-    'Ipswich': 'https://resources.premierleague.com/premierleague/badges/50/t40.png',
-    'Leicester': 'https://resources.premierleague.com/premierleague/badges/50/t13.png',
-    'Liverpool': 'https://resources.premierleague.com/premierleague/badges/50/t14.png',
-    'Man City': 'https://resources.premierleague.com/premierleague/badges/50/t43.png',
-    'Man Utd': 'https://resources.premierleague.com/premierleague/badges/50/t1.png',
-    'Newcastle': 'https://resources.premierleague.com/premierleague/badges/50/t4.png',
-    'Nott\'m Forest': 'https://resources.premierleague.com/premierleague/badges/50/t17.png',
-    'Southampton': 'https://resources.premierleague.com/premierleague/badges/50/t20.png',
-    'Tottenham': 'https://resources.premierleague.com/premierleague/badges/50/t6.png',
-    'West Ham': 'https://resources.premierleague.com/premierleague/badges/50/t21.png',
-    'Wolves': 'https://resources.premierleague.com/premierleague/badges/50/t39.png',
-}
-
-# --- STYLE CSS ULTRA MODERNE ---
-# Remplacez la section CSS (ligne ~66-280) par ce code amélioré :
-
-# Remplacez la section CSS (ligne ~66-280) par ce design minimaliste professionnel :
-
+# --- STYLE CSS (DU MODÈLE) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
-    /* ========== BASE MINIMALISTE ========== */
-    .stApp {
-        background: #ffffff;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        color: #1a1a1a;
-    }
+    .stApp { background: #ffffff; font-family: 'Inter', sans-serif; color: #1a1a1a; }
+    h1 { color: #1a1a1a !important; font-weight: 700 !important; font-size: 2.5rem !important; letter-spacing: -0.02em; }
+    h2 { color: #1a1a1a !important; font-weight: 600 !important; margin-top: 2rem !important; }
     
-    /* ========== TYPOGRAPHIE CLEAN ========== */
-    h1 {
-        color: #1a1a1a !important;
-        font-weight: 700 !important;
-        letter-spacing: -0.02em;
-        font-size: 2.5rem !important;
-        margin-bottom: 0.5rem !important;
-        line-height: 1.2;
-    }
-    
-    h2 {
-        color: #1a1a1a !important;
-        font-weight: 600 !important;
-        font-size: 1.5rem !important;
-        margin-top: 3rem !important;
-        margin-bottom: 1rem !important;
-        letter-spacing: -0.01em;
-    }
-    
-    h3 {
-        color: #4a4a4a !important;
-        font-weight: 600 !important;
-        font-size: 1.1rem !important;
-        margin-bottom: 0.75rem !important;
-    }
-    
-    p, .stMarkdown {
-        color: #6a6a6a;
-        line-height: 1.6;
-        font-weight: 400;
-    }
-    
-    /* ========== CARTES MINIMALISTES ========== */
-    .stat-card {
-        background: #ffffff;
-        border: 1px solid #e8e8e8;
-        border-radius: 8px;
-        padding: 1.5rem;
-        margin: 0.75rem 0;
-        transition: all 0.2s ease;
-    }
-    
-    .stat-card:hover {
-        border-color: #1a1a1a;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-    }
-    
-    .stat-value {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #1a1a1a;
-        line-height: 1.2;
-        letter-spacing: -0.02em;
-    }
-    
-    .stat-label {
-        color: #8a8a8a;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        font-weight: 600;
-        margin-top: 0.25rem;
-    }
-    
-    /* ========== BOUTONS PROFESSIONNELS ========== */
+    /* Boutons */
     .stButton>button {
-        width: 100%;
-        background: #1a1a1a;
-        color: #ffffff;
-        border: none;
-        border-radius: 6px;
-        font-weight: 600;
-        font-size: 0.9rem;
-        padding: 0.75rem 1.5rem;
-        transition: all 0.2s ease;
-        letter-spacing: 0.01em;
+        width: 100%; background: #1a1a1a; color: #ffffff; border: none; border-radius: 6px;
+        font-weight: 600; padding: 0.75rem 1.5rem; transition: all 0.2s ease;
     }
+    .stButton>button:hover { background: #000000; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     
-    .stButton>button:hover {
-        background: #000000;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
+    /* Sidebar */
+    [data-testid="stSidebar"] { background: #fafafa; border-right: 1px solid #e8e8e8; }
     
-    .stButton>button:active {
-        transform: translateY(0);
-    }
+    /* Cards & Containers */
+    .stat-card { background: #ffffff; border: 1px solid #e8e8e8; border-radius: 8px; padding: 1.5rem; transition: all 0.2s ease; }
+    .stat-card:hover { border-color: #1a1a1a; }
     
-    /* ========== SIDEBAR ÉPURÉE ========== */
-    [data-testid="stSidebar"] {
-        background: #fafafa;
-        border-right: 1px solid #e8e8e8;
-    }
+    /* Metrics */
+    [data-testid="stMetricValue"] { font-size: 2rem; font-weight: 700; color: #1a1a1a; }
+    [data-testid="stMetricLabel"] { color: #8a8a8a !important; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
     
-    [data-testid="stSidebar"] h2 {
-        color: #1a1a1a !important;
-    }
+    /* Spinners & Alerts */
+    .stSpinner > div { border-top-color: #1a1a1a !important; }
+    .stSuccess { border-left-color: #22c55e !important; background: #f0fdf4 !important; }
+    .stError { border-left-color: #ef4444 !important; background: #fef2f2 !important; }
+    .stInfo { border-left-color: #3b82f6 !important; background: #eff6ff !important; }
     
-    [data-testid="stSidebar"] .stMarkdown {
-        color: #6a6a6a;
-    }
-    
-    /* ========== TABS MINIMALISTES ========== */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0;
-        background: transparent;
-        border-bottom: 1px solid #e8e8e8;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        background: transparent;
-        border: none;
-        border-bottom: 2px solid transparent;
-        border-radius: 0;
-        color: #8a8a8a;
-        font-weight: 600;
-        padding: 0.75rem 1.5rem;
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
-    }
-    
-    .stTabs [data-baseweb="tab"]:hover {
-        color: #1a1a1a;
-        background: #fafafa;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        color: #1a1a1a !important;
-        border-bottom-color: #1a1a1a !important;
-        background: transparent !important;
-    }
-    
-    /* ========== MÉTRIQUES STREAMLIT ========== */
-    [data-testid="stMetricValue"] {
-        font-size: 2rem;
-        font-weight: 700;
-        color: #1a1a1a;
-        letter-spacing: -0.02em;
-    }
-    
-    [data-testid="stMetricLabel"] {
-        color: #8a8a8a !important;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        font-size: 0.75rem;
-    }
-    
-    [data-testid="stMetricDelta"] {
-        font-size: 0.85rem;
-    }
-    
-    /* ========== INPUTS CLEAN ========== */
-    .stSelectbox > div > div,
-    .stTextInput > div > div {
-        background: #ffffff;
-        border: 1px solid #e8e8e8;
-        border-radius: 6px;
-        color: #1a1a1a;
-        transition: all 0.2s ease;
-        font-weight: 500;
-    }
-    
-    .stSelectbox > div > div:hover,
-    .stTextInput > div > div:hover {
-        border-color: #1a1a1a;
-    }
-    
-    .stSelectbox > div > div:focus-within,
-    .stTextInput > div > div:focus-within {
-        border-color: #1a1a1a;
-        box-shadow: 0 0 0 1px #1a1a1a;
-    }
-    
-    /* ========== RADIO BUTTONS ========== */
-    .stRadio > div {
-        background: transparent;
-        padding: 0;
-    }
-    
-    .stRadio label {
-        color: #1a1a1a !important;
-        font-weight: 500;
-        padding: 0.5rem 0;
-    }
-    
-    .stRadio [role="radiogroup"] label:hover {
-        background: #fafafa;
-    }
-    
-    /* ========== EXPANDER MINIMAL ========== */
-    .streamlit-expanderHeader {
-        background: #fafafa;
-        border: 1px solid #e8e8e8;
-        border-radius: 6px;
-        font-weight: 600;
-        color: #1a1a1a !important;
-        transition: all 0.2s ease;
-    }
-    
-    .streamlit-expanderHeader:hover {
-        background: #f0f0f0;
-        border-color: #1a1a1a;
-    }
-    
-    /* ========== ALERTES PROPRES ========== */
-    .stAlert {
-        background: #fafafa;
-        border: 1px solid #e8e8e8;
-        border-radius: 6px;
-        color: #1a1a1a;
-        border-left-width: 3px;
-    }
-    
-    .stSuccess {
-        border-left-color: #22c55e !important;
-        background: #f0fdf4 !important;
-    }
-    
-    .stError {
-        border-left-color: #ef4444 !important;
-        background: #fef2f2 !important;
-    }
-    
-    .stWarning {
-        border-left-color: #f59e0b !important;
-        background: #fffbeb !important;
-    }
-    
-    .stInfo {
-        border-left-color: #3b82f6 !important;
-        background: #eff6ff !important;
-    }
-    
-    /* ========== DATAFRAMES ========== */
-    .dataframe {
-        background: #ffffff !important;
-        border: 1px solid #e8e8e8 !important;
-        border-radius: 6px !important;
-        font-size: 0.9rem;
-    }
-    
-    .dataframe thead tr th {
-        background: #fafafa !important;
-        color: #1a1a1a !important;
-        font-weight: 600 !important;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        font-size: 0.75rem;
-        border-bottom: 1px solid #e8e8e8 !important;
-    }
-    
-    .dataframe tbody tr {
-        border-bottom: 1px solid #f0f0f0 !important;
-    }
-    
-    .dataframe tbody tr:hover {
-        background: #fafafa !important;
-    }
-    
-    /* ========== SCROLLBAR MINIMAL ========== */
-    ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: #fafafa;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: #d0d0d0;
-        border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: #1a1a1a;
-    }
-    
-    /* ========== BADGE PREMIUM ========== */
-    .premium-badge {
-        display: inline-block;
-        background: #1a1a1a;
-        color: #ffffff;
-        padding: 0.25rem 0.75rem;
-        border-radius: 4px;
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-left: 0.75rem;
-        vertical-align: middle;
-    }
-    
-    /* ========== LOGOS CLUBS SUBTLE ========== */
-    .club-logo {
-        width: 40px;
-        height: 40px;
-        opacity: 0.4;
-        transition: opacity 0.2s ease;
-        filter: grayscale(100%);
-    }
-    
-    .club-logo:hover {
-        opacity: 1;
-        filter: grayscale(0%);
-    }
-    
-    /* ========== SPINNER ========== */
-    .stSpinner > div {
-        border-top-color: #1a1a1a !important;
-        border-right-color: #1a1a1a !important;
-    }
-    
-    /* ========== DIVIDERS ========== */
-    hr {
-        margin: 2.5rem 0;
-        border: none;
-        height: 1px;
-        background: #e8e8e8;
-    }
-    
-    /* ========== DOWNLOAD BUTTON ========== */
-    .stDownloadButton > button {
-        background: #ffffff;
-        color: #1a1a1a;
-        border: 1px solid #1a1a1a;
-        border-radius: 6px;
-        font-weight: 600;
-        padding: 0.75rem 1.5rem;
-        transition: all 0.2s ease;
-    }
-    
-    .stDownloadButton > button:hover {
-        background: #1a1a1a;
-        color: #ffffff;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-    
-    /* ========== CONTAINERS ========== */
-    .element-container {
-        margin-bottom: 1rem;
-    }
-    
-    /* ========== HEADERS CLEAN ========== */
-    header[data-testid="stHeader"] {
-        background: transparent;
-    }
-    
-    /* ========== FOCUS STATES ========== */
-    *:focus-visible {
-        outline: 2px solid #1a1a1a;
-        outline-offset: 2px;
-    }
-    
-    /* ========== SELECTIONS ========== */
-    ::selection {
-        background: #1a1a1a;
-        color: #ffffff;
-    }
-    
-    /* ========== IMAGES ========== */
-    img {
-        border-radius: 4px;
-    }
-    
-    /* ========== RESPONSIVE ========== */
-    @media (max-width: 768px) {
-        h1 {
-            font-size: 2rem !important;
-        }
-        
-        h2 {
-            font-size: 1.3rem !important;
-        }
-        
-        .stat-value {
-            font-size: 2rem;
-        }
-        
-        .stButton>button {
-            padding: 0.65rem 1.25rem;
-        }
-    }
-    
-    /* ========== DARK MODE OVERRIDE (si activé) ========== */
-    @media (prefers-color-scheme: dark) {
-        .stApp {
-            background: #0a0a0a;
-            color: #e8e8e8;
-        }
-        
-        h1, h2 {
-            color: #ffffff !important;
-        }
-        
-        h3 {
-            color: #d0d0d0 !important;
-        }
-        
-        p, .stMarkdown {
-            color: #a0a0a0;
-        }
-        
-        .stat-card {
-            background: #1a1a1a;
-            border-color: #2a2a2a;
-        }
-        
-        .stat-card:hover {
-            border-color: #ffffff;
-        }
-        
-        .stat-value {
-            color: #ffffff;
-        }
-        
-        .stButton>button {
-            background: #ffffff;
-            color: #0a0a0a;
-        }
-        
-        .stButton>button:hover {
-            background: #e8e8e8;
-        }
-        
-        [data-testid="stSidebar"] {
-            background: #0f0f0f;
-            border-right-color: #2a2a2a;
-        }
-        
-        .stTabs [data-baseweb="tab-list"] {
-            border-bottom-color: #2a2a2a;
-        }
-        
-        .stTabs [aria-selected="true"] {
-            color: #ffffff !important;
-            border-bottom-color: #ffffff !important;
-        }
-        
-        .stSelectbox > div > div,
-        .stTextInput > div > div {
-            background: #1a1a1a;
-            border-color: #2a2a2a;
-            color: #e8e8e8;
-        }
-        
-        .dataframe {
-            background: #1a1a1a !important;
-            border-color: #2a2a2a !important;
-        }
-        
-        .dataframe thead tr th {
-            background: #0f0f0f !important;
-            color: #ffffff !important;
-        }
-        
-        hr {
-            background: #2a2a2a;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: #0f0f0f;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: #3a3a3a;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: #ffffff;
-        }
-    }
+    /* Premium Badge */
+    .premium-badge { display: inline-block; background: #1a1a1a; color: #ffffff; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-left: 0.75rem; }
     </style>
-    """, unsafe_allow_html=True)
-# --- FONCTIONS UTILITAIRES ---
+""", unsafe_allow_html=True)
 
+# --- GESTION POLICES & STYLE GRAPHIQUE ---
 @st.cache_resource
-def load_fonts():
-    """Charge la police personnalisée ou utilise le défaut."""
+def get_fonts():
     try:
-        if os.path.exists(FONT_PATH):
-            return fm.FontProperties(fname=FONT_PATH)
+        if os.path.exists(CUSTOM_FONT_PATH):
+            prop = fm.FontProperties(fname=CUSTOM_FONT_PATH)
+            bold = fm.FontProperties(fname=CUSTOM_FONT_PATH, weight='bold')
+            return prop, bold
     except:
         pass
-    return fm.FontProperties(family='sans-serif')
+    return fm.FontProperties(family='sans-serif'), fm.FontProperties(family='sans-serif', weight='bold')
 
-FONT_PROP = load_fonts()
+FONT_PROP, FONT_BOLD = get_fonts()
 
-@st.cache_data(ttl=300)
-def get_club_logo(url):
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        resp = requests.get(url, headers=headers, timeout=3)
-        if resp.status_code == 200:
-            return Image.open(BytesIO(resp.content))
-    except:
-        pass
-    return None
+STYLE = {
+    'background': '#0E1117',
+    'text_color': '#FFFFFF',
+    'sub_text': '#A0A0A0',
+    'home_color': '#00BFFF',
+    'away_color': '#FF4B4B',
+    'line_color': '#2B313E',
+    'legend_blue': '#5DADEC',
+    'font_prop': FONT_PROP,
+    'font_bold': FONT_BOLD
+}
 
-def display_club_logos():
-    """Affiche le carousel de logos des clubs"""
-    cols = st.columns(20)
-    for idx, (club, url) in enumerate(list(PREMIER_LEAGUE_CLUBS.items())):
-        with cols[idx % 20]:
-            logo = get_club_logo(url)
-            if logo:
-                st.image(logo, width=30, use_container_width=False)
-    st.markdown("---")
-
-def load_match_list():
-    matches = []
-    if not os.path.exists(URLS_FILE):
-        return []
-    
-    with open(URLS_FILE, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        header_match = re.search(r'^Match (\d+) - (.+)', line)
-        
-        if header_match:
-            mid = header_match.group(1)
-            title = header_match.group(2)
-            url = None
-            
-            for j in range(1, 4):
-                if i + j < len(lines):
-                    next_line = lines[i+j].strip()
-                    if next_line.startswith("https://") and mid in next_line:
-                        url = next_line
-                        break
-            
-            if url:
-                gameweek = (len(matches) // 10) + 1 
-                matches.append({
-                    'id': mid, 
-                    'title': title, 
-                    'url': url,
-                    'gameweek': gameweek,
-                    'filename': f"{mid}.html"
-                })
-        i += 1
-    return matches
-
-# --- CLASSES LOGIQUE MÉTIER (INCHANGÉES) ---
+# --- CLASSES UTILITAIRES (DOWNLOADER & PARSER) ---
 
 class StreamlitDownloader:
     def download_match(self, url, filename):
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
         from selenium.webdriver.chrome.service import Service
+        from webdriver_manager.chrome import ChromeDriverManager
         
         filepath = os.path.join(DATA_FOLDER, filename)
         options = Options()
         options.add_argument("--headless=new")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--window-size=1920,1080")
-        options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         
-        system_chromedriver = shutil.which("chromedriver")
-        if system_chromedriver:
-            service = Service(system_chromedriver)
-        else:
-            try:
-                from webdriver_manager.chrome import ChromeDriverManager
-                service = Service(ChromeDriverManager().install())
-            except Exception as e:
-                st.error(f"❌ Impossible de configurer le driver : {e}")
-                return False
-
-        driver = None
         try:
+            service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=options)
-            with st.spinner(f"🌍 Connexion à WhoScored..."):
+            
+            with st.spinner(f"🌍 Connexion à WhoScored : {url}"):
                 driver.get(url)
-                time.sleep(6)
+                time.sleep(5)
                 content = driver.page_source
+                
+                # Check Incapsula
                 if "Incapsula" in content or "challenge" in content.lower():
-                    st.warning("🛡️ Vérification de sécurité détectée...")
-                    time.sleep(12)
+                    st.warning("🛡️ Protection détectée, tentative d'attente...")
+                    time.sleep(15)
                     content = driver.page_source
+                
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(content)
+            
+            driver.quit()
             return True
         except Exception as e:
             st.error(f"❌ Erreur Selenium : {str(e)}")
             return False
-        finally:
-            if driver:
-                try:
-                    driver.quit()
-                except:
-                    pass
 
 class MatchParser:
     def __init__(self, html_path):
         self.html_path = html_path
         self.soup = None
         self.data = self._load_data()
+        self.mc = self.data['matchCentreData']
+        self.events = pd.DataFrame(self.mc['events'])
+        
+        # Nettoyage
+        for col in ['x', 'y', 'endX', 'endY']:
+            if col not in self.events.columns: self.events[col] = 0.0
+            
+        def safe_get_name(x): return x.get('displayName') if isinstance(x, dict) else None
+        def safe_get_id(x):
+            try: return int(x.get('value')) if isinstance(x, dict) else -1
+            except: return -1
+
+        self.events['type_name'] = self.events['type'].apply(safe_get_name)
+        self.events['type_id'] = self.events['type'].apply(safe_get_id)
+        self.events['outcome_name'] = self.events['outcomeType'].apply(safe_get_name)
+        self.events['outcome_id'] = self.events['outcomeType'].apply(safe_get_id)
+        self.events['teamId'] = pd.to_numeric(self.events['teamId'], errors='coerce').fillna(0).astype(int)
 
     def _load_data(self):
-        try:
-            with open(self.html_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            self.soup = BeautifulSoup(content, 'html.parser')
-            
-            regex1 = r"require\.config\.params\[\"args\"\]\s*=\s*({.*?});"
-            match1 = re.search(regex1, content, re.DOTALL)
-            if match1:
-                return self._clean_and_parse_json(match1.group(1))
-            
-            regex2 = r"matchCentreData:\s*({.*?}),\s*matchCentreEventTypeJson"
-            match2 = re.search(regex2, content, re.DOTALL)
-            if match2:
-                return {'matchCentreData': self._clean_and_parse_json(match2.group(1))}
-            
-            scripts = self.soup.find_all('script')
-            for script in scripts:
-                script_text = script.string
-                if script_text and 'matchCentreData' in script_text:
-                    match3 = re.search(r'matchCentreData["\']?\s*:\s*({.*?})\s*[,}]', script_text, re.DOTALL)
-                    if match3:
-                        return {'matchCentreData': self._clean_and_parse_json(match3.group(1))}
-            
-            all_matches = re.finditer(r'({[^{}]*"home"[^{}]*"away"[^{}]*"events"[^{}]*})', content)
-            for match in all_matches:
-                try:
-                    parsed = self._clean_and_parse_json(match.group(1))
-                    if 'home' in parsed and 'away' in parsed and 'events' in parsed:
-                        return {'matchCentreData': parsed}
-                except:
-                    continue
-            raise ValueError("❌ JSON de données introuvable")
-        except Exception as e:
-            raise ValueError(f"❌ Erreur de parsing : {e}")
-
-    def _clean_and_parse_json(self, json_str):
-        keys_to_quote = ['matchId', 'matchCentreData', 'matchCentreEventTypeJson', 'formationIdNameMappings', 'home', 'away', 'score', 'htScore', 'ftScore', 'etScore', 'pkScore', 'events', 'playerIdNameDictionary', 'teamId', 'name', 'managerName', 'players', 'playerId', 'shirtNo', 'position', 'isFirstEleven', 'age', 'height', 'weight', 'isManOfTheMatch', 'stats', 'ratings', 'type', 'displayName', 'outcomeType', 'qualifiers', 'satisfiedEventsTypes', 'x', 'y', 'endX', 'endY', 'id', 'eventId', 'minute', 'second', 'teamFormation', 'formations', 'startTime', 'venueName', 'attendance', 'weatherCode', 'elapsed', 'statusCode', 'periodCode']
-        for key in keys_to_quote:
-            json_str = re.sub(rf'\b{key}\s*:', f'"{key}":', json_str)
-        json_str = re.sub(r'\bundefined\b', 'null', json_str)
-        json_str = re.sub(r',\s*([}\]])', r'\1', json_str)
-        try:
-            return json.loads(json_str)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"JSON invalide : {e}")
-
-    def get_all_data(self):
-        if 'matchCentreData' not in self.data:
-            raise ValueError("Structure incorrecte : 'matchCentreData' manquant")
-        mc = self.data['matchCentreData']
-        if 'home' not in mc or 'away' not in mc:
-            raise ValueError("Données des équipes manquantes")
+        with open(self.html_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.soup = BeautifulSoup(content, 'html.parser')
         
-        match_info = {
-            'score': mc.get('score', 'N/A'),
-            'venue': mc.get('venueName', 'Stade Inconnu'),
-            'startTime': mc.get('startTime', ''),
-            'attendance': mc.get('attendance', 'N/A'),
-            'htScore': mc.get('htScore', 'N/A'),
+        # Regex robuste pour extraire le JSON
+        regex = r"require\.config\.params\[\"args\"\]\s*=\s*({.*?});"
+        match = re.search(regex, content, re.DOTALL)
+        
+        # Fallback si le regex standard échoue
+        if not match:
+             regex_alt = r"matchCentreData:\s*({.*?}),\s*matchCentreEventTypeJson"
+             match_alt = re.search(regex_alt, content, re.DOTALL)
+             if match_alt:
+                 json_str = match_alt.group(1)
+                 # On wrap pour correspondre à la structure attendue
+                 json_str = '{"matchCentreData": ' + json_str + '}'
+             else:
+                raise ValueError("JSON data not found via Regex")
+        else:
+            json_str = match.group(1)
+
+        # Nettoyage JSON JS -> Python
+        json_str = json_str.replace('matchId', '"matchId"') \
+                           .replace('matchCentreData', '"matchCentreData"') \
+                           .replace('matchCentreEventTypeJson', '"matchCentreEventTypeJson"') \
+                           .replace('formationIdNameMappings', '"formationIdNameMappings"')
+        
+        # Nettoyage supplémentaire des clés non citées si nécessaire (simple)
+        return json.loads(json_str)
+
+    def get_match_info(self):
+        home_fmt, away_fmt = 'N/A', 'N/A'
+        if self.soup:
+            divs = self.soup.find_all('div', class_='formation')
+            if len(divs) >= 2:
+                home_fmt = divs[0].get_text(strip=True)
+                away_fmt = divs[1].get_text(strip=True)
+        
+        try: h_id = int(self.mc['home']['teamId'])
+        except: h_id = 0
+        try: a_id = int(self.mc['away']['teamId'])
+        except: a_id = 0
+            
+        return {
+            'score': self.mc['score'],
+            'venue': self.mc.get('venueName', 'Stade Inconnu'),
+            'date': self.mc.get('startTime', '')[:10],
+            'home': {'name': self.mc['home']['name'], 'manager': self.mc['home'].get('managerName',''), 'formation': home_fmt, 'id': h_id},
+            'away': {'name': self.mc['away']['name'], 'manager': self.mc['away'].get('managerName',''), 'formation': away_fmt, 'id': a_id}
         }
-        
-        fmt_divs = self.soup.find_all('div', class_='formation')
-        formations = [d.get_text(strip=True) for d in fmt_divs]
-        
-        teams = {
-            'home': {'id': mc['home'].get('teamId', 0), 'name': mc['home'].get('name', 'Équipe Domicile'), 'manager': mc['home'].get('managerName', 'N/A'), 'formation': formations[0] if len(formations) > 0 else 'N/A'},
-            'away': {'id': mc['away'].get('teamId', 0), 'name': mc['away'].get('name', 'Équipe Extérieur'), 'manager': mc['away'].get('managerName', 'N/A'), 'formation': formations[1] if len(formations) > 1 else 'N/A'}
-        }
-        
-        logos = {}
-        emblems = self.soup.find_all('div', class_='team-emblem')
-        for i, emblem in enumerate(emblems[:2]):
-            img = emblem.find('img')
-            if img and img.get('src'):
-                url = img['src']
-                if url.startswith('//'): url = 'https:' + url
-                logos[i] = url
-        return mc, match_info, teams, logos
 
-class PassNetworkEngine:
-    def process(self, mc):
-        if 'events' not in mc: raise ValueError("Aucun événement trouvé")
-        events = pd.DataFrame(mc['events'])
-        
-        players_list = []
+    def get_players(self):
+        players = []
         for side in ['home', 'away']:
-            if side not in mc or 'teamId' not in mc[side]: continue
-            tid = mc[side]['teamId']
-            if 'players' in mc[side]:
-                for p in mc[side]['players']:
-                    p['teamId'] = tid
-                    players_list.append(p)
-        
-        if not players_list: raise ValueError("Aucun joueur trouvé")
-        df_players = pd.DataFrame(players_list)
-        
-        for col in ['endX', 'endY', 'x', 'y']:
-            if col not in events.columns: events[col] = 0.0
-        
-        if 'type' not in events.columns: events['type'] = None
-        if 'outcomeType' not in events.columns: events['outcomeType'] = None
-            
-        events['type'] = events['type'].apply(lambda x: x.get('displayName') if isinstance(x, dict) else x)
-        events['outcomeType'] = events['outcomeType'].apply(lambda x: x.get('displayName') if isinstance(x, dict) else x)
-        
-        events['next_teamId'] = events['teamId'].shift(-1)
-        events['next_playerId'] = events['playerId'].shift(-1)
-        mask = (events['type'] == 'Pass') & (events['outcomeType'] == 'Successful') & (events['teamId'] == events['next_teamId'])
-        events.loc[mask, 'receiverId'] = events.loc[mask, 'next_playerId']
-        return events, df_players
+            try: tid = int(self.mc[side]['teamId'])
+            except: tid = 0
+            for p in self.mc[side]['players']:
+                p['teamId'] = tid
+                players.append(p)
+        return pd.DataFrame(players)
 
-    def get_network(self, team_id, events, players, min_passes=3):
-        starters = players[(players['teamId'] == team_id) & (players['isFirstEleven'] == True)]
+    def get_logos(self):
+        logos = {}
+        if self.soup:
+            emblems = self.soup.find_all('div', class_='team-emblem')
+            for i, e in enumerate(emblems[:2]):
+                img = e.find('img')
+                if img and img.get('src'):
+                    url = img['src']
+                    if url.startswith('//'): url = 'https:' + url
+                    logos[i] = url
+        return logos
+
+    def get_formation_from_html(self):
+        grids = {}
+        if not self.soup: return grids
+        fields = self.soup.find_all('div', class_='pitch-field')
+        for field in fields:
+            tid = field.get('data-team-id')
+            side = field.get('data-field')
+            if not tid: continue
+            try: tid = int(tid)
+            except: continue
+            
+            players_pos = []
+            player_divs = field.find_all('div', class_='player')
+            for p in player_divs:
+                pid = p.get('data-player-id')
+                if not pid: continue
+                style = p.get('style', '')
+                x_opta, y_opta = 50.0, 50.0
+                
+                if side == 'home':
+                    l_match = re.search(r'left\s*:\s*([\d\.]+)%', style)
+                    b_match = re.search(r'bottom\s*:\s*([\d\.]+)%', style)
+                    if l_match: x_opta = float(l_match.group(1))
+                    if b_match: y_opta = float(b_match.group(1))
+                elif side == 'away':
+                    r_match = re.search(r'right\s*:\s*([\d\.]+)%', style)
+                    t_match = re.search(r'top\s*:\s*([\d\.]+)%', style)
+                    if r_match: x_opta = 100.0 - float(r_match.group(1))
+                    if t_match: y_opta = float(t_match.group(1))
+                
+                players_pos.append({'playerId': int(pid), 'x': x_opta, 'y': y_opta})
+            
+            if players_pos: grids[tid] = pd.DataFrame(players_pos)
+        return grids
+
+# --- ANALYTICS ENGINE (LE CERVEAU) ---
+
+class AnalyticsEngine:
+    def __init__(self, events_df, players_df, home_id, away_id, formation_grids=None):
+        self.events = events_df
+        self.players = players_df
+        self.home_id = int(home_id)
+        self.away_id = int(away_id)
+        self.formation_grids = formation_grids if formation_grids else {}
+
+        # CALCUL DU xG (Simplifié)
+        shot_ids = [10, 13, 14, 15, 16] # Blocked, Miss, Post, Saved, Goal
+        if 'xg' not in self.events.columns:
+            self.events['dist_goal'] = np.sqrt((100 - self.events['x'])**2 + (50 - self.events['y'])**2)
+            self.events['xg'] = np.where(self.events['type_id'].isin(shot_ids),
+                                         15 / (self.events['dist_goal'] + 5), 0)
+            self.events.loc[self.events['xg'] > 0.99, 'xg'] = 0.99
+
+    def get_pass_network(self, team_id):
+        starters = self.players[(self.players['teamId'] == team_id) & (self.players['isFirstEleven'] == True)]
+        if starters.empty: starters = self.players[self.players['teamId'] == team_id].head(11)
         starter_ids = starters['playerId'].unique()
-        
-        if len(starter_ids) == 0: return pd.DataFrame(), pd.DataFrame(columns=['playerId', 'name', 'shirtNo', 'position', 'x', 'y', 'count'])
-        
-        team_events = events[(events['teamId'] == team_id) & (events['playerId'].isin(starter_ids))]
-        if team_events.empty: return pd.DataFrame(), pd.DataFrame(columns=['playerId', 'name', 'shirtNo', 'position', 'x', 'y', 'count'])
-        
-        avg_locs = team_events.groupby('playerId').agg({'x':'mean', 'y':'mean', 'id':'count'}).rename(columns={'id':'count'})
-        avg_locs = avg_locs.merge(players[['playerId', 'name', 'shirtNo', 'position']], on='playerId')
-        
-        passes = team_events[(team_events['type'] == 'Pass') & (team_events['outcomeType'] == 'Successful') & (team_events['receiverId'].notna()) & (team_events['receiverId'].isin(starter_ids))].copy()
-        if passes.empty: return pd.DataFrame(), avg_locs
-        
-        passes['pair'] = passes.apply(lambda r: tuple(sorted([r['playerId'], r['receiverId']])), axis=1)
+
+        passes = self.events[
+            (self.events['teamId'] == team_id) &
+            (self.events['type_name'] == 'Pass') &
+            (self.events['outcome_name'] == 'Successful') &
+            (self.events['playerId'].isin(starter_ids))
+        ].copy()
+
+        passes['receiverId'] = self.events['playerId'].shift(-1)
+        # Drop passes with no receiver or receiver not in starters
+        passes = passes[passes['receiverId'].isin(starter_ids)]
+
+        avg_locs = passes.groupby('playerId').agg({'x': 'mean', 'y': 'mean', 'id': 'count'}).rename(columns={'id': 'count'}).reset_index()
+        avg_locs = avg_locs.merge(starters[['playerId', 'name', 'shirtNo', 'position']], on='playerId', how='inner')
+
+        passes['pair'] = passes.apply(lambda x: tuple(sorted([x['playerId'], x['receiverId']])), axis=1)
         pass_counts = passes.groupby('pair').size().reset_index(name='pass_count')
-        pass_counts = pass_counts[pass_counts['pass_count'] >= min_passes]
-        
+        pass_counts = pass_counts[pass_counts['pass_count'] >= 3]
+
         network = []
         for _, row in pass_counts.iterrows():
             p1, p2 = row['pair']
             if p1 in avg_locs['playerId'].values and p2 in avg_locs['playerId'].values:
-                l1 = avg_locs[avg_locs['playerId'] == p1].iloc[0]
-                l2 = avg_locs[avg_locs['playerId'] == p2].iloc[0]
-                network.append({'player1': l1['name'], 'player2': l2['name'], 'x_start': l1['x'], 'y_start': l1['y'], 'x_end': l2['x'], 'y_end': l2['y'], 'pass_count': row['pass_count']})
+                l1 = avg_locs[avg_locs['playerId']==p1].iloc[0]
+                l2 = avg_locs[avg_locs['playerId']==p2].iloc[0]
+                network.append({'x_start': l1['x'], 'y_start': l1['y'], 'x_end': l2['x'], 'y_end': l2['y'], 'pass_count': row['pass_count']})
+
+        player_list = avg_locs.sort_values('shirtNo', key=lambda x: pd.to_numeric(x, errors='coerce'))
+        return pd.DataFrame(network), avg_locs, player_list
+
+    def get_formation_positions(self, team_id):
+        starters = self.players[(self.players['teamId'] == team_id) & (self.players['isFirstEleven'] == True)]
+        if starters.empty: starters = self.players[self.players['teamId'] == team_id].head(11)
         
-        return pd.DataFrame(network), avg_locs
+        # Priorité : Grille extraite du HTML (CSS positions)
+        if team_id in self.formation_grids:
+            grid = self.formation_grids[team_id]
+            if 'playerId' in grid.columns:
+                formation = starters.merge(grid, on='playerId', how='inner')
+                if not formation.empty: return formation
 
-class DashboardVisualizer:
-    def create_dashboard(self, match_info, teams, home_net, home_nodes, away_net, away_nodes, home_logo_url, away_logo_url):
-        home_logo_img = self._get_logo_from_url(home_logo_url)
-        away_logo_img = self._get_logo_from_url(away_logo_url)
-        stats = {'home': {}, 'away': {}}
-        return self.draw_dashboard(match_info, teams, stats, home_net, home_nodes, away_net, away_nodes, home_logo_img, away_logo_img, output_file=None)
-    
-    def _get_logo_from_url(self, url):
-        if not url: return None
-        try:
-            headers = {'User-Agent': 'Mozilla/5.0'}
-            resp = requests.get(url, headers=headers, stream=True, timeout=5)
-            if resp.status_code == 200: return Image.open(BytesIO(resp.content))
-        except: return None
-        return None
+        # Fallback : Moyenne des positions
+        starter_ids = starters['playerId'].unique()
+        team_events = self.events[(self.events['teamId'] == team_id) & (self.events['playerId'].isin(starter_ids))]
+        avg_locs = team_events.groupby('playerId').agg({'x': 'mean', 'y': 'mean'}).reset_index()
+        return starters.merge(avg_locs, on='playerId', how='left').dropna(subset=['x', 'y'])
 
-    def draw_dashboard(self, match_info, teams, stats, home_net, home_nodes, away_net, away_nodes, home_logo_img, away_logo_img, output_file=None):
-        STYLE = {'background': '#0E1117', 'text_color': '#FFFFFF', 'sub_text': '#A0A0A0', 'home_color': '#00BFFF', 'away_color': '#FF4B4B', 'line_color': '#2B313E', 'font_prop': FONT_PROP, 'legend_blue': '#5DADEC'}
+    def get_xg_flow(self):
+        shot_ids = [10, 13, 14, 15, 16]
+        shots = self.events[self.events['type_id'].isin(shot_ids)].copy()
+        
+        if 'name' not in shots.columns and not self.players.empty:
+             if 'playerId' in shots.columns:
+                 shots = shots.merge(self.players[['playerId', 'name']], on='playerId', how='left')
 
-        fig = plt.figure(figsize=(24, 22), facecolor=STYLE['background'])
-        gs = gridspec.GridSpec(4, 3, width_ratios=[1, 0.05, 1], height_ratios=[0.08, 0.04, 0.68, 0.20])
+        shots['minute'] = shots['minute'].astype(int)
+        max_min = max(95, shots['minute'].max() + 1)
+        minutes = range(0, max_min)
+        home_xg, away_xg = [0.0], [0.0]
+        h_cum, a_cum = 0.0, 0.0
+        
+        for m in minutes:
+            h_min = shots[(shots['teamId'] == self.home_id) & (shots['minute'] == m)]['xg'].sum()
+            a_min = shots[(shots['teamId'] == self.away_id) & (shots['minute'] == m)]['xg'].sum()
+            h_cum += h_min; a_cum += a_min
+            home_xg.append(h_cum); away_xg.append(a_cum)
+            
+        return minutes, home_xg[:-1], away_xg[:-1], shots
 
+    def get_actions(self, team_id):
+        mask = (self.events['teamId'] == team_id) & \
+               (self.events['outcome_name'] == 'Successful') & \
+               (~self.events['type_name'].isin(['SubstitutionOn', 'SubstitutionOff', 'Card', 'Start', 'End']))
+        return self.events[mask][['x', 'y']]
+
+    def get_all_shots(self):
+         shot_ids = [10, 13, 14, 15, 16]
+         shots = self.events[self.events['type_id'].isin(shot_ids)].copy()
+         shots['size'] = 50 + (shots['xg'] * 500)
+         return shots
+
+    def get_possession(self):
+        h_pass = len(self.events[(self.events['teamId'] == self.home_id) & (self.events['type_name'] == 'Pass')])
+        a_pass = len(self.events[(self.events['teamId'] == self.away_id) & (self.events['type_name'] == 'Pass')])
+        total = h_pass + a_pass
+        if total == 0: return 50, 50
+        return round(h_pass/total*100), round(a_pass/total*100)
+
+    def get_comprehensive_stats(self):
+        stats = []
+        def count_id(tid, type_ids, outcome_val=None):
+            mask = (self.events['teamId'] == tid) & (self.events['type_id'].isin(type_ids))
+            if outcome_val is not None: mask &= (self.events['outcome_id'] == outcome_val)
+            return len(self.events[mask])
+        
+        def count_name(tid, type_names, outcome=None):
+            mask = (self.events['teamId'] == tid) & (self.events['type_name'].isin(type_names))
+            if outcome: mask &= (self.events['outcome_name'] == outcome)
+            return len(self.events[mask])
+
+        # 1. Buts
+        stats.append({'label': 'Buts', 'home': count_id(self.home_id, [16]), 'away': count_id(self.away_id, [16]), 'type': 'int'})
+        # 2. xG
+        h_xg = self.events[self.events['teamId'] == self.home_id]['xg'].sum()
+        a_xg = self.events[self.events['teamId'] == self.away_id]['xg'].sum()
+        stats.append({'label': 'Expected Goals (xG)', 'home': h_xg, 'away': a_xg, 'type': 'float'})
+        # 3. Tirs
+        total_shots = [10, 13, 14, 15, 16]; target = [15, 16]
+        stats.append({'label': 'Tirs Totaux', 'home': count_id(self.home_id, total_shots), 'away': count_id(self.away_id, total_shots), 'type': 'int'})
+        stats.append({'label': 'Tirs Cadrés', 'home': count_id(self.home_id, target), 'away': count_id(self.away_id, target), 'type': 'int'})
+        # 4. Possession
+        h_poss, a_poss = self.get_possession()
+        stats.append({'label': 'Possession (%)', 'home': h_poss, 'away': a_poss, 'type': 'percent'})
+        # 5. Passes
+        h_pass, a_pass = count_name(self.home_id, ['Pass']), count_name(self.away_id, ['Pass'])
+        stats.append({'label': 'Passes', 'home': h_pass, 'away': a_pass, 'type': 'int'})
+        h_acc = (count_name(self.home_id, ['Pass'], 'Successful') / h_pass * 100) if h_pass > 0 else 0
+        a_acc = (count_name(self.away_id, ['Pass'], 'Successful') / a_pass * 100) if a_pass > 0 else 0
+        stats.append({'label': 'Précision Passes (%)', 'home': h_acc, 'away': a_acc, 'type': 'percent'})
+        # Autres
+        stats.append({'label': 'Dribbles Réussis', 'home': count_name(self.home_id, ['TakeOn'], 'Successful'), 'away': count_name(self.away_id, ['TakeOn'], 'Successful'), 'type': 'int'})
+        stats.append({'label': 'Duels Aériens', 'home': count_name(self.home_id, ['Aerial'], 'Successful'), 'away': count_name(self.away_id, ['Aerial'], 'Successful'), 'type': 'int'})
+        stats.append({'label': 'Tacles', 'home': count_name(self.home_id, ['Tackle']), 'away': count_name(self.away_id, ['Tackle']), 'type': 'int'})
+        stats.append({'label': 'Interceptions', 'home': count_name(self.home_id, ['Interception']), 'away': count_name(self.away_id, ['Interception']), 'type': 'int'})
+        stats.append({'label': 'Dégagements', 'home': count_name(self.home_id, ['Clearance']), 'away': count_name(self.away_id, ['Clearance']), 'type': 'int'})
+        stats.append({'label': 'Ballons Récupérés', 'home': count_name(self.home_id, ['BallRecovery']), 'away': count_name(self.away_id, ['BallRecovery']), 'type': 'int'})
+        stats.append({'label': 'Cartons Jaunes', 'home': count_name(self.home_id, ['Card'], 'Successful'), 'away': count_name(self.away_id, ['Card'], 'Successful'), 'type': 'int'})
+
+        return pd.DataFrame(stats)
+
+# --- MEGA VISUALIZER (MATPLOTLIB) ---
+
+class MegaDashboard:
+    def draw(self, match_info, analytics, home_logo_img, away_logo_img):
+        fig = plt.figure(figsize=(24, 25), facecolor=STYLE['background'])
+        gs = gridspec.GridSpec(2, 3, width_ratios=[1, 1.2, 1], height_ratios=[0.08, 0.92])
+        gs.update(wspace=0.15, hspace=0.02)
+
+        # Calculs des données
+        nodes_h = analytics.get_formation_positions(match_info['home']['id'])
+        nodes_a = analytics.get_formation_positions(match_info['away']['id'])
+        net_h_main, nodes_h_main, list_h = analytics.get_pass_network(match_info['home']['id'])
+        net_a_main, nodes_a_main, list_a = analytics.get_pass_network(match_info['away']['id'])
+        stats_df = analytics.get_comprehensive_stats()
+        mins, h_xg, a_xg, shots_data = analytics.get_xg_flow()
+
+        # === 1. HEADER ===
         ax_header = fig.add_subplot(gs[0, :])
-        self._draw_header(ax_header, match_info, teams, home_logo_img, away_logo_img, STYLE)
+        self._draw_header(ax_header, match_info, home_logo_img, away_logo_img)
 
-        ax_legend = fig.add_subplot(gs[1, :])
-        self._draw_legend(ax_legend, STYLE)
+        # === 2. COLONNE GAUCHE (HOME) ===
+        gs_left = gridspec.GridSpecFromSubplotSpec(3, 1, subplot_spec=gs[1, 0], height_ratios=[0.35, 0.35, 0.30])
+        self._draw_pass_network(fig.add_subplot(gs_left[0]), net_h_main, nodes_h_main, STYLE['home_color'])
+        self._draw_heatmap(fig.add_subplot(gs_left[1]), analytics.get_actions(match_info['home']['id']), STYLE['home_color'], "Zones d'activité")
+        self._draw_player_list(fig.add_subplot(gs_left[2]), list_h)
 
-        ax_home = fig.add_subplot(gs[2, 0])
-        self._draw_pass_map(ax_home, home_net, home_nodes, STYLE['home_color'], STYLE)
+        # === 3. COLONNE DROITE (AWAY) ===
+        gs_right = gridspec.GridSpecFromSubplotSpec(3, 1, subplot_spec=gs[1, 2], height_ratios=[0.35, 0.35, 0.30])
+        self._draw_pass_network(fig.add_subplot(gs_right[0]), net_a_main, nodes_a_main, STYLE['away_color'], flip=True)
+        self._draw_heatmap(fig.add_subplot(gs_right[1]), analytics.get_actions(match_info['away']['id']), STYLE['away_color'], "Zones d'activité")
+        self._draw_player_list(fig.add_subplot(gs_right[2]), list_a)
 
-        ax_arrow = fig.add_subplot(gs[2, 1])
-        self._draw_direction_arrow(ax_arrow, STYLE)
+        # === 4. COLONNE CENTRALE (STATS & CHARTS) ===
+        gs_center = gridspec.GridSpecFromSubplotSpec(3, 1, subplot_spec=gs[1, 1], height_ratios=[0.60, 0.25, 0.15])
+        self._draw_duel_stats_large(fig.add_subplot(gs_center[0]), stats_df)
+        self._draw_shotmap(fig.add_subplot(gs_center[1]), analytics.get_all_shots(), match_info['home']['id'], match_info['away']['id'])
+        self._draw_xg_flow(fig.add_subplot(gs_center[2]), mins, h_xg, a_xg, shots_data, match_info)
 
-        ax_away = fig.add_subplot(gs[2, 2])
-        self._draw_pass_map(ax_away, away_net, away_nodes, STYLE['away_color'], STYLE, flip=False)
-
-        ax_lineup_home = fig.add_subplot(gs[3, 0])
-        self._draw_lineup(ax_lineup_home, home_nodes, STYLE['home_color'], teams['home']['name'], STYLE)
-
-        ax_lineup_away = fig.add_subplot(gs[3, 2])
-        self._draw_lineup(ax_lineup_away, away_nodes, STYLE['away_color'], teams['away']['name'], STYLE)
-
-        fig.text(0.5, 0.01, "Données: WhoScored/Opta | Visualisation: Advanced Python Analysis", ha='center', color=STYLE['sub_text'], fontsize=12, fontproperties=STYLE['font_prop'])
-        plt.tight_layout()
-        plt.subplots_adjust(top=0.95, hspace=0.02, wspace=0.02)
-        
-        if output_file:
-            plt.savefig(output_file, facecolor=STYLE['background'], dpi=300, bbox_inches='tight')
-            plt.close(fig)
         return fig
 
-    def _draw_header(self, ax, match_info, teams, home_logo, away_logo, STYLE):
+    def _draw_header(self, ax, info, h_logo, a_logo):
         ax.axis('off')
-        if home_logo:
-            ib_home = OffsetImage(home_logo, zoom=0.9)
-            ab_home = AnnotationBbox(ib_home, (0.10, 0.5), frameon=False, xycoords='axes fraction', box_alignment=(0.5, 0.5))
-            ax.add_artist(ab_home)
-        if away_logo:
-            ib_away = OffsetImage(away_logo, zoom=0.9)
-            ab_away = AnnotationBbox(ib_away, (0.90, 0.5), frameon=False, xycoords='axes fraction', box_alignment=(0.5, 0.5))
-            ax.add_artist(ab_away)
+        ax.text(0.35, 0.70, info['home']['name'], ha='right', va='center', fontsize=24, color=STYLE['home_color'], fontproperties=STYLE['font_bold'])
+        ax.text(0.35, 0.50, f"{info['home']['manager']}", ha='right', va='center', fontsize=16, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
+        ax.text(0.35, 0.30, f"({info['home']['formation']})", ha='right', va='center', fontsize=12, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
 
-        start_time = match_info.get('startTime', '')
-        date_display = start_time[:10] if len(start_time) >= 10 else 'Date inconnue'
-        date_venue = f"{date_display} | {match_info.get('venue', 'Stade Inconnu')}"
-        ax.text(0.5, 0.90, date_venue, ha='center', va='center', color=STYLE['sub_text'], fontsize=14, fontproperties=STYLE['font_prop'])
-        score_txt = str(match_info.get('score', 'N/A')).replace(' : ', '-')
-        ax.text(0.5, 0.50, score_txt, ha='center', va='center', fontsize=65, weight='bold', color='white', fontproperties=STYLE['font_prop'])
-        ax.text(0.5, 0.25, "Score final", ha='center', va='center', fontsize=14, weight='bold', color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
-        ax.text(0.35, 0.65, teams['home']['name'].upper(), ha='right', va='center', fontsize=30, weight='bold', color=STYLE['home_color'], fontproperties=STYLE['font_prop'])
-        ax.text(0.65, 0.65, teams['away']['name'].upper(), ha='left', va='center', fontsize=30, weight='bold', color=STYLE['away_color'], fontproperties=STYLE['font_prop'])
-        home_sub = f"{teams['home'].get('manager', 'N/A')}\n({teams['home'].get('formation', 'N/A')})"
-        away_sub = f"{teams['away'].get('manager', 'N/A')}\n({teams['away'].get('formation', 'N/A')})"
-        ax.text(0.35, 0.35, home_sub, ha='right', va='center', fontsize=16, color=STYLE['sub_text'], weight='normal', fontproperties=STYLE['font_prop'])
-        ax.text(0.65, 0.35, away_sub, ha='left', va='center', fontsize=16, color=STYLE['sub_text'], weight='normal', fontproperties=STYLE['font_prop'])
+        if h_logo:
+            ab = AnnotationBbox(OffsetImage(h_logo, zoom=1.2), (0.05, 0.60), frameon=False, xycoords='axes fraction', box_alignment=(0.5,0.5))
+            ax.add_artist(ab)
 
-    def _draw_pass_map(self, ax, net_df, nodes_df, color, STYLE, flip=False):
-        pitch = VerticalPitch(pitch_type='opta', pitch_color=STYLE['background'], line_color=STYLE['line_color'], linewidth=1.5)
+        ax.text(0.65, 0.70, info['away']['name'], ha='left', va='center', fontsize=24, color=STYLE['away_color'], fontproperties=STYLE['font_bold'])
+        ax.text(0.65, 0.50, f"{info['away']['manager']}", ha='left', va='center', fontsize=16, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
+        ax.text(0.65, 0.30, f"({info['away']['formation']})", ha='left', va='center', fontsize=12, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
+
+        if a_logo:
+            ab = AnnotationBbox(OffsetImage(a_logo, zoom=1.2), (0.95, 0.60), frameon=False, xycoords='axes fraction', box_alignment=(0.5,0.5))
+            ax.add_artist(ab)
+
+        score = str(info['score']).replace(' : ', ' - ')
+        ax.text(0.5, 0.60, score, ha='center', va='center', fontsize=36, color=STYLE['text_color'], fontproperties=STYLE['font_bold'])
+        ax.text(0.5, 0.85, f"{info['date']} | {info['venue']}", ha='center', fontsize=12, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
+
+    def _draw_duel_stats_large(self, ax, df):
+        ax.set_facecolor(STYLE['background'])
+        ax.axis('off')
+        df = df.iloc[::-1].reset_index(drop=True)
+        ax.set_ylim(-1, len(df))
+        ax.set_xlim(-1.1, 1.1)
+        
+        for i, row in df.iterrows():
+            val_h, val_a = row['home'], row['away']
+            m_val = max(val_h, val_a) if max(val_h, val_a) > 0 else 1
+            w_h, w_a = (val_h/m_val)*0.6, (val_a/m_val)*0.6
+            gap = 0.45
+            
+            ax.barh(i, -w_h, left=-gap, height=0.65, color=STYLE['home_color'], alpha=1.0 if val_h>=val_a else 0.5)
+            ax.barh(i, w_a, left=gap, height=0.65, color=STYLE['away_color'], alpha=1.0 if val_a>=val_h else 0.5)
+            
+            ax.text(0, i, row['label'], ha='center', va='center', fontsize=14, color=STYLE['text_color'], fontproperties=STYLE['font_bold'])
+            
+            str_h = f"{val_h:.2f}" if row['type']=='float' else (f"{val_h:.1f}%" if row['type']=='percent' else str(int(val_h)))
+            str_a = f"{val_a:.2f}" if row['type']=='float' else (f"{val_a:.1f}%" if row['type']=='percent' else str(int(val_a)))
+            
+            ax.text(-gap - w_h - 0.05, i, str_h, ha='right', va='center', fontsize=16, color=STYLE['home_color'], fontproperties=STYLE['font_bold'])
+            ax.text(gap + w_a + 0.05, i, str_a, ha='left', va='center', fontsize=16, color=STYLE['away_color'], fontproperties=STYLE['font_bold'])
+
+    def _draw_pass_network(self, ax, net, nodes, color, flip=False):
+        pitch = VerticalPitch(pitch_type='opta', pitch_color=STYLE['background'], line_color=STYLE['line_color'])
         pitch.draw(ax=ax)
-        if not net_df.empty: net_df = net_df.copy()
-        if not nodes_df.empty: nodes_df = nodes_df.copy()
-        if flip:
-             net_df['x_start'] = 100 - net_df['x_start']; net_df['y_start'] = 100 - net_df['y_start']
-             net_df['x_end'] = 100 - net_df['x_end']; net_df['y_end'] = 100 - net_df['y_end']
-             nodes_df['x'] = 100 - nodes_df['x']; nodes_df['y'] = 100 - nodes_df['y']
-        if not net_df.empty:
-            max_pass = net_df['pass_count'].max()
-            if max_pass > 0:
-                width = (net_df['pass_count'] / max_pass * 12)
-                pitch.lines(net_df['x_start'], net_df['y_start'], net_df['x_end'], net_df['y_end'], lw=width, ax=ax, color=color, alpha=0.5, zorder=2)
-        if not nodes_df.empty:
-            max_count = nodes_df['count'].max()
-            if max_count > 0:
-                for i, row in nodes_df.iterrows():
-                    size = (row['count'] / max_count) * 1500
-                    pitch.scatter(row['x'], row['y'], s=size, color=STYLE['background'], edgecolors=color, linewidth=2, zorder=3, ax=ax)
-                    pitch.annotate(row['shirtNo'], xy=(row['x'], row['y']), va='center', ha='center', color='white', fontsize=12, weight='bold', zorder=4, ax=ax, fontproperties=STYLE['font_prop'])
+        if not net.empty:
+            width = net['pass_count'] / net['pass_count'].max() * 8
+            pitch.lines(net['x_start'], net['y_start'], net['x_end'], net['y_end'], lw=width, ax=ax, color=color, alpha=0.6, zorder=2)
+        if not nodes.empty:
+            pitch.scatter(nodes['x'], nodes['y'], s=nodes['count']*15, color=STYLE['background'], edgecolors=color, linewidth=2, zorder=3, ax=ax)
+            for _, row in nodes.iterrows():
+                pitch.annotate(row['shirtNo'], (row['x'], row['y']), ax=ax, color='white', ha='center', va='center', fontsize=9, weight='bold', zorder=4)
 
-    def _draw_direction_arrow(self, ax, STYLE):
-        ax.axis('off'); ax.set_xlim(0, 1); ax.set_ylim(0, 1)
-        ax.annotate('', xy=(0.7, 0.95), xytext=(0.7, 0.05), arrowprops=dict(facecolor='white', edgecolor='white', width=1.5, headwidth=8, headlength=10), xycoords='axes fraction', textcoords='axes fraction')
-        ax.text(0.3, 0.5, "Sens du jeu", rotation=90, ha='center', va='center', color='white', fontsize=14, weight='bold', fontproperties=STYLE['font_prop'])
+    def _draw_heatmap(self, ax, actions, color, title):
+        pitch = VerticalPitch(pitch_type='opta', pitch_color=STYLE['background'], line_color=STYLE['line_color'])
+        pitch.draw(ax=ax)
+        rgb = to_rgba(color)[:3]
+        cmap = LinearSegmentedColormap.from_list("custom", [(rgb[0], rgb[1], rgb[2], 0), (rgb[0], rgb[1], rgb[2], 1)])
+        if not actions.empty:
+            pitch.kdeplot(actions['x'], actions['y'], ax=ax, cmap=cmap, fill=True, levels=50, thresh=0.05)
+        ax.set_title(title, fontsize=12, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
 
-    def _draw_lineup(self, ax, nodes_df, color, team_name, STYLE):
+    def _draw_player_list(self, ax, player_df):
         ax.axis('off')
-        if nodes_df.empty: return
-        nodes_df = nodes_df.copy()
-        nodes_df['shirtNoInt'] = pd.to_numeric(nodes_df['shirtNo'], errors='coerce').fillna(999).astype(int)
-        lineup = nodes_df.sort_values('shirtNoInt')
-        y_start = 0.96; y_step = 0.12
-        half = (len(lineup) + 1) // 2
-        col1 = lineup.iloc[:half]; col2 = lineup.iloc[half:]
-        y_pos = y_start
-        for _, row in col1.iterrows():
-            txt = f"{row['shirtNo']} - {row['name']}"
-            ax.text(0.20, y_pos, txt, color='white', fontsize=13, ha='left', fontproperties=STYLE['font_prop'])
-            y_pos -= y_step
-        y_pos = y_start
-        for _, row in col2.iterrows():
-            txt = f"{row['shirtNo']} - {row['name']}"
-            ax.text(0.60, y_pos, txt, color='white', fontsize=13, ha='left', fontproperties=STYLE['font_prop'])
-            y_pos -= y_step
+        if player_df.empty: return
+        y_pos = 1.1
+        for _, row in player_df.head(15).iterrows():
+            ax.text(0.30, y_pos, str(row['shirtNo']), fontsize=12, ha='right', va='top', color=STYLE['sub_text'], fontproperties=STYLE['font_bold'])
+            ax.text(0.45, y_pos, str(row['name']), fontsize=12, ha='left', va='top', color=STYLE['text_color'], fontproperties=STYLE['font_prop'])
+            y_pos -= 0.065
 
-    def _draw_legend(self, ax, STYLE):
-        ax.axis('off'); ax.set_xlim(0, 1); ax.set_ylim(0, 1)
-        legend_y = 0.4
-        ax.text(0.15, legend_y, "Peu de passes", ha='right', va='center', color='white', fontsize=12, weight='bold', fontproperties=STYLE['font_prop'])
-        sizes = [80, 200, 400, 700]; x_start = 0.17; x_spacing = 0.03
-        for i, s in enumerate(sizes): ax.scatter(x_start + (i * x_spacing), legend_y, s=s, color=STYLE['background'], edgecolors=STYLE['legend_blue'], linewidth=1.5)
-        ax.text(x_start + (len(sizes) * x_spacing) + 0.0005, legend_y, "Beaucoup de passes", ha='left', va='center', color='white', fontsize=12, weight='bold', fontproperties=STYLE['font_prop'])
-        right_start = 0.55
-        ax.text(right_start, legend_y, "Combine peu", ha='right', va='center', color='white', fontsize=12, weight='bold', fontproperties=STYLE['font_prop'])
-        widths = [1, 3, 6]; line_length = 0.04; line_spacing = 0.01; current_x = right_start + 0.02
-        for w in widths: ax.plot([current_x, current_x + line_length], [legend_y, legend_y], color='white', lw=w); current_x += line_length + line_spacing
-        ax.text(current_x + 0.01, legend_y, "Combine beaucoup", ha='left', va='center', color='white', fontsize=12, weight='bold', fontproperties=STYLE['font_prop'])
+    def _draw_shotmap(self, ax, shots, home_id, away_id):
+        pitch = Pitch(pitch_type='opta', pitch_color=STYLE['background'], line_color=STYLE['line_color'])
+        pitch.draw(ax=ax)
+        h_shots = shots[shots['teamId'] == home_id]
+        if not h_shots.empty:
+            pitch.scatter(h_shots['x'], h_shots['y'], s=h_shots['size'], edgecolors=STYLE['home_color'], c='none', ax=ax, alpha=0.7)
+            goals = h_shots[h_shots['type_name']=='Goal']
+            pitch.scatter(goals['x'], goals['y'], s=goals['size'], c=STYLE['home_color'], marker='*', ax=ax, zorder=5)
+        a_shots = shots[shots['teamId'] == away_id]
+        if not a_shots.empty:
+            pitch.scatter(100-a_shots['x'], 100-a_shots['y'], s=a_shots['size'], edgecolors=STYLE['away_color'], c='none', ax=ax, alpha=0.7)
+            goals = a_shots[a_shots['type_name']=='Goal']
+            pitch.scatter(100-goals['x'], 100-goals['y'], s=goals['size'], c=STYLE['away_color'], marker='*', ax=ax, zorder=5)
+        ax.set_title("Shotmap", fontsize=14, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
 
-# --- FONCTION PRINCIPALE (UI MODERNISÉE) ---
+    def _draw_xg_flow(self, ax, mins, h_xg, a_xg, shots, info):
+        ax.set_facecolor(STYLE['background'])
+        ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color(STYLE['sub_text']); ax.spines['bottom'].set_color(STYLE['sub_text'])
+        ax.tick_params(axis='both', colors='white')
+        ax.step(mins, h_xg, where='post', color=STYLE['home_color'], linewidth=2, label='Home')
+        ax.step(mins, a_xg, where='post', color=STYLE['away_color'], linewidth=2, label='Away')
+        ax.set_title("xG Flow", fontsize=14, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
+        ax.grid(axis='y', linestyle='--', alpha=0.3)
+
+# --- APPLICATION PRINCIPALE ---
+
+def load_match_list():
+    matches = []
+    if not os.path.exists(URLS_FILE): return []
+    with open(URLS_FILE, 'r', encoding='utf-8') as f: lines = f.readlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        header = re.search(r'^Match (\d+) - (.+)', line)
+        if header:
+            mid, title = header.group(1), header.group(2)
+            url = None
+            for j in range(1, 4):
+                if i+j < len(lines):
+                    next_l = lines[i+j].strip()
+                    if next_l.startswith("https://") and mid in next_l:
+                        url = next_l; break
+            if url:
+                matches.append({'id': mid, 'title': title, 'url': url, 'filename': f"{mid}.html"})
+        i += 1
+    return matches
+
+@st.cache_data
+def get_club_logo(url):
+    try:
+        if not url: return None
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        r = requests.get(url, headers=headers, timeout=3)
+        return Image.open(BytesIO(r.content)) if r.status_code == 200 else None
+    except: return None
 
 def main():
-    # Header Design
-    st.markdown('<h1>⚽ Premier League Analyst <span class="premium-badge">PRO</span></h1>', unsafe_allow_html=True)
-    st.markdown("*Analyse tactique avancée propulsée par l'IA et les données Opta*")
-    
-    display_club_logos() # Carousel
+    st.markdown('<h1>⚽ Premier League Analyst <span class="premium-badge">MEGA</span></h1>', unsafe_allow_html=True)
+    st.markdown("*Tableau de bord complet : xG, Stats Duel, Pass Networks, Heatmaps, Shotmaps*")
 
     # SIDEBAR
     st.sidebar.markdown("### 🛠️ Panneau de contrôle")
-    st.sidebar.markdown("---")
+    mode = st.sidebar.radio("Mode", ["📅 Calendrier", "🌐 URL Personnalisée"], label_visibility="collapsed")
     
-    mode = st.sidebar.radio(
-        "Mode de Sélection",
-        ["📅 Calendrier / Journées", "🌐 URL Personnalisée"],
-        label_visibility="collapsed"
-    )
-
-    selected_match_data = None
-    needs_download = False
+    selected_match = None
+    needs_dl = False
     
-    if mode == "📅 Calendrier / Journées":
+    if mode == "📅 Calendrier":
         matches = load_match_list()
         if not matches:
-            st.error(f"📁 Fichier '{URLS_FILE}' introuvable")
+            st.sidebar.error(f"Fichier '{URLS_FILE}' introuvable.")
         else:
-            df_matches = pd.DataFrame(matches)
-            gameweeks = sorted(df_matches['gameweek'].unique())
-            sel_gw = st.sidebar.selectbox("🏆 Sélectionner une Journée", gameweeks, format_func=lambda x: f"Gameweek {x}")
-            
-            gw_matches = df_matches[df_matches['gameweek'] == sel_gw]
-            match_options = {f"{r['title']}": r.to_dict() for _, r in gw_matches.iterrows()}
-            
-            sel_match_key = st.sidebar.selectbox("⚽ Sélectionner un Match", list(match_options.keys()))
-            selected_match_data = match_options[sel_match_key]
-            
-            file_path = os.path.join(DATA_FOLDER, selected_match_data['filename'])
-            if os.path.exists(file_path):
+            options = {m['title']: m for m in matches}
+            sel = st.sidebar.selectbox("Choisir un match", list(options.keys()))
+            selected_match = options[sel]
+            path = os.path.join(DATA_FOLDER, selected_match['filename'])
+            if os.path.exists(path):
                 st.sidebar.success("✅ Données disponibles")
-                needs_download = False
             else:
                 st.sidebar.warning("☁️ À télécharger")
-                needs_download = True
-
+                needs_dl = True
+                
     elif mode == "🌐 URL Personnalisée":
-        url_input = st.sidebar.text_input("🔗 Coller l'URL WhoScored ici")
-        if url_input:
-            match_id = re.search(r'/matches/(\d+)/', url_input)
-            if match_id:
-                mid = match_id.group(1)
-                selected_match_data = {'id': mid, 'title': f"Match #{mid}", 'url': url_input, 'filename': f"{mid}.html"}
-                file_path = os.path.join(DATA_FOLDER, selected_match_data['filename'])
-                needs_download = not os.path.exists(file_path)
+        url = st.sidebar.text_input("Coller URL WhoScored")
+        if url:
+            mid = re.search(r'/matches/(\d+)/', url)
+            if mid:
+                selected_match = {'id': mid.group(1), 'title': f"Match {mid.group(1)}", 'url': url, 'filename': f"{mid.group(1)}.html"}
+                path = os.path.join(DATA_FOLDER, selected_match['filename'])
+                needs_dl = not os.path.exists(path)
             else:
-                st.sidebar.error("❌ URL invalide")
+                st.sidebar.error("URL invalide")
 
-    if selected_match_data is not None:
-        st.markdown(f"## {selected_match_data['title']}")
+    if selected_match:
+        st.markdown(f"## {selected_match['title']}")
         
-        if needs_download:
-            st.info("💾 Les données ne sont pas en cache local. Cliquez ci-dessous pour lancer l'analyse.")
-            if st.button("🚀 Télécharger et Analyser le Match", type="primary"):
-                downloader = StreamlitDownloader()
-                success = downloader.download_match(selected_match_data['url'], selected_match_data['filename'])
-                if success:
-                    st.success("✅ Téléchargement réussi !")
-                    time.sleep(1)
+        if needs_dl:
+            if st.button("🚀 Télécharger et Analyser", type="primary"):
+                dl = StreamlitDownloader()
+                if dl.download_match(selected_match['url'], selected_match['filename']):
+                    st.success("Téléchargement réussi !")
                     st.rerun()
-                else:
-                    st.error("❌ Échec du téléchargement")
         else:
-            file_path = os.path.join(DATA_FOLDER, selected_match_data['filename'])
+            path = os.path.join(DATA_FOLDER, selected_match['filename'])
             try:
                 with st.spinner("🔍 Analyse tactique en cours..."):
-                    parser = MatchParser(file_path)
-                    mc, match_info, teams, logos = parser.get_all_data()
+                    parser = MatchParser(path)
+                    info = parser.get_match_info()
+                    form_grids = parser.get_formation_from_html()
+                    engine = AnalyticsEngine(parser.events, parser.get_players(), info['home']['id'], info['away']['id'], form_grids)
                     
-                    engine = PassNetworkEngine()
-                    events, players = engine.process(mc)
-                    home_net, home_nodes = engine.get_network(teams['home']['id'], events, players)
-                    away_net, away_nodes = engine.get_network(teams['away']['id'], events, players)
-                
-                # VISUALISATION
-                st.markdown("---")
-                with st.spinner("🎨 Génération de la visualisation HD..."):
-                    viz = DashboardVisualizer()
-                    fig = viz.create_dashboard(match_info, teams, home_net, home_nodes, away_net, away_nodes, logos.get(0), logos.get(1))
+                    # Récupération Logos
+                    logos = parser.get_logos()
+                    h_img = get_club_logo(logos.get(0))
+                    a_img = get_club_logo(logos.get(1))
+                    
+                    # Génération Dashboard
+                    viz = MegaDashboard()
+                    fig = viz.draw(info, engine, h_img, a_img)
                     
                     st.pyplot(fig, use_container_width=True)
                     
-                    # Bouton de téléchargement
-                    col1, col2, col3 = st.columns([1, 2, 1])
-                    with col2:
-                        buf = BytesIO()
-                        fig.savefig(buf, format="png", facecolor='#0E1117', bbox_inches='tight', dpi=300)
-                        st.download_button(
-                            label="💾 Télécharger l'image (Haute Résolution)",
-                            data=buf.getvalue(),
-                            file_name=f"PassNetwork_{selected_match_data['id']}_HD.png",
-                            mime="image/png",
-                            use_container_width=True
-                        )
+                    # Download
+                    buf = BytesIO()
+                    fig.savefig(buf, format="png", facecolor=STYLE['background'], bbox_inches='tight', dpi=300)
+                    st.download_button("💾 Télécharger le Mega Dashboard (HD)", data=buf.getvalue(), file_name=f"MegaStats_{selected_match['id']}.png", mime="image/png")
+                    
                     plt.close(fig)
-
             except Exception as e:
-                st.error(f"❌ Erreur d'analyse : {e}")
-                if st.button("🗑️ Effacer le cache corrompu"):
-                    os.remove(file_path)
-                    st.rerun()
-
-    else:
-        st.markdown("### 👋 Bienvenue")
-        st.info("Sélectionnez un match dans le menu de gauche pour commencer.")
-    
-    st.markdown("---")
-    st.markdown("<div style='text-align: center; color: #666; font-size: 0.8rem;'>Analysis Tool v2.0 • Data via WhoScored/Opta</div>", unsafe_allow_html=True)
+                st.error(f"Erreur d'analyse : {e}")
+                # st.exception(e) # Décommenter pour debug
 
 if __name__ == "__main__":
     main()
