@@ -205,71 +205,97 @@ class MatchParser:
         
         # STRATÉGIE MULTI-REGEX (ordre de priorité)
         patterns = [
+            # Pattern 1 : Standard WhoScored
             r"require\.config\.params\[\"args\"\]\s*=\s*(\{.*?\});",
+            # Pattern 2 : Variable matchCentreData directe
             r"var\s+matchCentreData\s*=\s*(\{.*?\});",
+            # Pattern 3 : Dans un objet global
             r"matchCentreData:\s*(\{.*?\}),?\s*matchCentreEventTypeJson",
+            # Pattern 4 : Autre format possible
             r"\"matchCentreData\":\s*(\{.*?\}),?\s*\"matchCentreEventTypeJson\""
         ]
         
         json_str = None
+        pattern_used = -1
         for i, pattern in enumerate(patterns):
             match = re.search(pattern, content, re.DOTALL)
             if match:
                 json_str = match.group(1)
+                pattern_used = i
+                # Si c'est le pattern 3 ou 4, wrapper dans la structure attendue
                 if i >= 2:
                     json_str = '{"matchCentreData": ' + json_str + '}'
                 break
         
         if not json_str:
+            # DERNIER RECOURS : Recherche de tout objet contenant "events" et "home"
             fallback = re.search(r'(\{[^{}]*"events"\s*:\s*\[[^]]*\][^{}]*"home"\s*:\s*\{.*?\})', content, re.DOTALL)
             if fallback:
                 json_str = '{"matchCentreData": ' + fallback.group(1) + '}'
             else:
+                # Sauvegarde du HTML pour debug
                 debug_path = self.html_path.replace('.html', '_DEBUG.html')
                 with open(debug_path, 'w', encoding='utf-8') as f:
-                    f.write(content[:50000])
+                    f.write(content[:50000])  # Premiers 50k chars
                 raise ValueError(f"❌ JSON data not found. Saved debug file: {debug_path}")
 
-        # --- NETTOYAGE ROBUSTE ET SÉLECTIF ---
-        # Au lieu de tout remplacer (ce qui casse les URLs http:), on cible les clés spécifiques de WhoScored.
-        
-        keys_to_quote = [
-            'matchId', 'matchCentreData', 'matchCentreEventTypeJson', 'formationIdNameMappings', 
-            'home', 'away', 'score', 'htScore', 'ftScore', 'etScore', 'pkScore', 'events', 
-            'playerIdNameDictionary', 'teamId', 'name', 'managerName', 'players', 'playerId', 
-            'shirtNo', 'position', 'isFirstEleven', 'age', 'height', 'weight', 'isManOfTheMatch', 
-            'stats', 'ratings', 'type', 'displayName', 'outcomeType', 'qualifiers', 
-            'satisfiedEventsTypes', 'x', 'y', 'endX', 'endY', 'id', 'eventId', 'minute', 
-            'second', 'teamFormation', 'formations', 'startTime', 'venueName', 'attendance', 
-            'weatherCode', 'elapsed', 'statusCode', 'periodCode', 'expandedMinute', 'period', 
-            'type', 'outcomeType', 'cardType', 'isTouch', 'blockingPlayerId', 'isGoal', 
-            'relatedEventId', 'relatedPlayerId', 'goalMouthZ', 'goalMouthY', 'isShot',
-            'field', 'countryName', 'shortName', 'teamName', 'regionName', 'subbedOutPlayerId',
-            'subbedInPlayerId', 'officialName', 'firstName', 'lastName', 'incidents'
-        ]
-
-        # 1. Remplacement des clés spécifiques uniquement
-        for key in keys_to_quote:
-            # \b = limite de mot, \s* = espaces optionnels
-            json_str = re.sub(rf'\b{key}\s*:', f'"{key}":', json_str)
-
-        # 2. Nettoyage générique prudent
-        json_str = re.sub(r'\bundefined\b', 'null', json_str)
-        # On remplace les quotes simples par des doubles pour être compatible JSON
-        # Cela suppose que les valeurs string sont entourées de ' ' dans le JS source
-        json_str = json_str.replace("'", '"')
+        # NETTOYAGE JSON ULTRA-ROBUSTE
+        json_str = self._clean_json_string(json_str, pattern_used)
         
         try:
             return json.loads(json_str)
         except json.JSONDecodeError as e:
-            # Tentative de rattrapage : suppression des virgules finales invalides en JSON
-            json_str = re.sub(r',\s*}', '}', json_str)
-            json_str = re.sub(r',\s*]', ']', json_str)
-            try:
-                return json.loads(json_str)
-            except:
-                # Affichage d'un extrait de l'erreur pour aider au debug
-                raise ValueError(f"❌ JSON parsing failed: {str(e)[:100]}")
+            # Sauvegarde pour debug
+            debug_json_path = self.html_path.replace('.html', '_DEBUG.json')
+            with open(debug_json_path, 'w', encoding='utf-8') as f:
+                f.write(json_str[:5000])
+            raise ValueError(f"❌ JSON parsing failed: {str(e)[:200]}. Saved to {debug_json_path}")
+
+    def _clean_json_string(self, json_str, pattern_used):
+        """Nettoyage hyper-robuste du JSON JavaScript"""
+        
+        # Étape 1 : Gestion des clés non-quotées (SEULEMENT si pattern 0 ou 1)
+        if pattern_used in [0, 1]:
+            # Liste des clés connues de WhoScored
+            known_keys = [
+                'matchId', 'matchCentreData', 'matchCentreEventTypeJson', 
+                'formationIdNameMappings', 'events', 'home', 'away', 
+                'playerIdNameDictionary', 'timeStamp', 'attendence', 
+                'venueName', 'score', 'htScore', 'ftScore', 'teamId',
+                'name', 'countryName', 'managerName', 'players', 'playerId',
+                'shirtNo', 'position', 'height', 'weight', 'age', 'isFirstEleven',
+                'isManOfTheMatch', 'stats', 'type', 'outcomeType', 'qualifiers',
+                'satisfiedEventsTypes', 'isTouch', 'displayName', 'value', 'field',
+                'shortName', 'teamName', 'regionName', 'subbedOutPlayerId',
+                'subbedInPlayerId', 'officialName', 'firstName', 'lastName', 'incidents'
+            ]
+            
+            # Remplacement intelligent des clés connues
+            for key in known_keys:
+                json_str = re.sub(rf'\b{key}\s*:', f'"{key}":', json_str)
+        
+        # Étape 2 : Guillemets simples -> doubles (mais pas dans les valeurs)
+        json_str = re.sub(r"'([^']*)':", r'"\1":', json_str)
+        
+        # Étape 3 : Suppression des virgules orphelines
+        json_str = re.sub(r',\s*}', '}', json_str)
+        json_str = re.sub(r',\s*]', ']', json_str)
+        
+        # Étape 4 : Suppression des commentaires JavaScript
+        json_str = re.sub(r'//.*', '', json_str, flags=re.MULTILINE)
+        json_str = re.sub(r'/\*.*?\*/', '', json_str, flags=re.DOTALL)
+        
+        # Étape 5 : Gestion des valeurs undefined/null JavaScript
+        json_str = json_str.replace('undefined', 'null')
+        json_str = json_str.replace('None', 'null')
+        
+        # Étape 6 : Suppression des caractères de contrôle invisibles
+        json_str = re.sub(r'[\x00-\x1F\x7F]', '', json_str)
+        
+        # Étape 7 : Correction des doubles virgules
+        json_str = re.sub(r',\s*,', ',', json_str)
+        
+        return json_str
 
     def get_match_info(self):
         home_fmt, away_fmt = 'N/A', 'N/A'
@@ -697,7 +723,8 @@ def load_match_list():
                     if next_l.startswith("https://") and mid in next_l:
                         url = next_l; break
             if url:
-                matches.append({'id': mid, 'title': title, 'url': url, 'filename': f"{mid}.html"})
+                gameweek = (len(matches) // 10) + 1
+                matches.append({'id': mid, 'title': title, 'url': url, 'filename': f"{mid}.html", 'gameweek': gameweek})
         i += 1
     return matches
 
@@ -726,7 +753,14 @@ def main():
         if not matches:
             st.sidebar.error(f"Fichier '{URLS_FILE}' introuvable.")
         else:
-            options = {m['title']: m for m in matches}
+            df_matches = pd.DataFrame(matches)
+            gameweeks = sorted(df_matches['gameweek'].unique())
+            
+            sel_gw = st.sidebar.selectbox("Choisir une Journée", gameweeks, format_func=lambda x: f"Journée {x}")
+            
+            gw_matches = df_matches[df_matches['gameweek'] == sel_gw]
+            options = {row['title']: row.to_dict() for _, row in gw_matches.iterrows()}
+            
             sel = st.sidebar.selectbox("Choisir un match", list(options.keys()))
             selected_match = options[sel]
             path = os.path.join(DATA_FOLDER, selected_match['filename'])
