@@ -703,7 +703,7 @@ class MegaDashboard:
                         fontsize=10, ha='center', va='bottom', weight='bold',
                         color=STYLE['text_color'], fontproperties=STYLE['font_prop'], zorder=25)
 
-        ax.set_title("xG Flow", fontsize=14, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
+        ax.set_title("Progression xG", fontsize=14, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
         ax.grid(axis='y', linestyle='--', alpha=0.3)
 
 # --- APPLICATION PRINCIPALE ---
