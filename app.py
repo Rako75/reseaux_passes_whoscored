@@ -502,7 +502,7 @@ class AnalyticsEngine:
         # 2. xG
         h_xg = self.events[self.events['teamId'] == self.home_id]['xg'].sum()
         a_xg = self.events[self.events['teamId'] == self.away_id]['xg'].sum()
-        stats.append({'label': 'Expected Goals (xG)', 'home': h_xg, 'away': a_xg, 'type': 'float'})
+        stats.append({'label': 'Buts attendus (xG)', 'home': h_xg, 'away': a_xg, 'type': 'float'})
         # 3. Tirs
         total_shots = [10, 13, 14, 15, 16]; target = [15, 16]
         stats.append({'label': 'Tirs Totaux', 'home': count_id(self.home_id, total_shots), 'away': count_id(self.away_id, total_shots), 'type': 'int'})
@@ -623,6 +623,8 @@ class MegaDashboard:
             pitch.scatter(nodes['x'], nodes['y'], s=nodes['count']*15, color=STYLE['background'], edgecolors=color, linewidth=2, zorder=3, ax=ax)
             for _, row in nodes.iterrows():
                 pitch.annotate(row['shirtNo'], (row['x'], row['y']), ax=ax, color='white', ha='center', va='center', fontsize=9, weight='bold', zorder=4)
+        ax.set_title("Réseau de passes", fontsize=12, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
+
 
     def _draw_heatmap(self, ax, actions, color, title):
         pitch = VerticalPitch(pitch_type='opta', pitch_color=STYLE['background'], line_color=STYLE['line_color'])
@@ -655,7 +657,7 @@ class MegaDashboard:
             pitch.scatter(100-a_shots['x'], 100-a_shots['y'], s=a_shots['size'], edgecolors=STYLE['away_color'], c='none', ax=ax, alpha=0.7)
             goals = a_shots[a_shots['type_name']=='Goal']
             pitch.scatter(100-goals['x'], 100-goals['y'], s=goals['size'], c=STYLE['away_color'], marker='*', ax=ax, zorder=5)
-        ax.set_title("Shotmap", fontsize=14, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
+        ax.set_title("Carte des tirs", fontsize=14, color=STYLE['sub_text'], fontproperties=STYLE['font_prop'])
 
     def _draw_xg_flow(self, ax, mins, h_xg, a_xg, shots, info):
         ax.set_facecolor(STYLE['background'])
