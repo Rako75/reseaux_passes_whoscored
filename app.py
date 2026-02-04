@@ -35,41 +35,57 @@ CUSTOM_FONT_PATH = "Montserrat-Regular.ttf"
 if not os.path.exists(DATA_FOLDER):
     os.makedirs(DATA_FOLDER)
 
-# --- STYLE CSS (DU MODÈLE) ---
+# --- STYLE CSS (DARK MODE) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
-    .stApp { background: #ffffff; font-family: 'Inter', sans-serif; color: #1a1a1a; }
-    h1 { color: #1a1a1a !important; font-weight: 700 !important; font-size: 2.5rem !important; letter-spacing: -0.02em; }
-    h2 { color: #1a1a1a !important; font-weight: 600 !important; margin-top: 2rem !important; }
+    /* FORCE DARK MODE */
+    .stApp { background: #0E1117; font-family: 'Inter', sans-serif; color: #FFFFFF; }
+    h1 { color: #FFFFFF !important; font-weight: 700 !important; font-size: 2.5rem !important; letter-spacing: -0.02em; }
+    h2 { color: #FFFFFF !important; font-weight: 600 !important; margin-top: 2rem !important; }
+    p, label, .stMarkdown { color: #A0A0A0 !important; }
     
     /* Boutons */
     .stButton>button {
-        width: 100%; background: #1a1a1a; color: #ffffff; border: none; border-radius: 6px;
+        width: 100%; background: #1F2937; color: #FFFFFF; border: 1px solid #374151; border-radius: 6px;
         font-weight: 600; padding: 0.75rem 1.5rem; transition: all 0.2s ease;
     }
-    .stButton>button:hover { background: #000000; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-    
+    .stButton>button:hover { background: #374151; border-color: #4B5563; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .stButton>button:active { background: #111827; }
+
     /* Sidebar */
-    [data-testid="stSidebar"] { background: #fafafa; border-right: 1px solid #e8e8e8; }
+    [data-testid="stSidebar"] { background: #161B22; border-right: 1px solid #30363D; }
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 { color: #FFFFFF !important; }
+    [data-testid="stSidebar"] label { color: #A0A0A0 !important; }
     
+    /* Inputs Dark */
+    .stTextInput>div>div, .stSelectbox>div>div {
+        background-color: #0D1117 !important;
+        color: #FFFFFF !important;
+        border: 1px solid #30363D !important;
+    }
+    .stTextInput>div>div:focus-within, .stSelectbox>div>div:focus-within {
+        border-color: #58A6FF !important;
+    }
+
     /* Cards & Containers */
-    .stat-card { background: #ffffff; border: 1px solid #e8e8e8; border-radius: 8px; padding: 1.5rem; transition: all 0.2s ease; }
-    .stat-card:hover { border-color: #1a1a1a; }
+    .stat-card { background: #161B22; border: 1px solid #30363D; border-radius: 8px; padding: 1.5rem; transition: all 0.2s ease; }
+    .stat-card:hover { border-color: #58A6FF; }
     
     /* Metrics */
-    [data-testid="stMetricValue"] { font-size: 2rem; font-weight: 700; color: #1a1a1a; }
-    [data-testid="stMetricLabel"] { color: #8a8a8a !important; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
+    [data-testid="stMetricValue"] { font-size: 2rem; font-weight: 700; color: #FFFFFF; }
+    [data-testid="stMetricLabel"] { color: #A0A0A0 !important; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
     
     /* Spinners & Alerts */
-    .stSpinner > div { border-top-color: #1a1a1a !important; }
-    .stSuccess { border-left-color: #22c55e !important; background: #f0fdf4 !important; }
-    .stError { border-left-color: #ef4444 !important; background: #fef2f2 !important; }
-    .stInfo { border-left-color: #3b82f6 !important; background: #eff6ff !important; }
-    
+    .stSpinner > div { border-top-color: #FFFFFF !important; }
+    .stSuccess { border-left-color: #238636 !important; background: #0D1117 !important; color: #E6FFFA !important; border: 1px solid #238636; }
+    .stError { border-left-color: #DA3633 !important; background: #0D1117 !important; color: #FFEBE9 !important; border: 1px solid #DA3633; }
+    .stInfo { border-left-color: #58A6FF !important; background: #0D1117 !important; color: #DBEDFF !important; border: 1px solid #58A6FF; }
+    .stWarning { border-left-color: #D29922 !important; background: #0D1117 !important; color: #FFF8C5 !important; border: 1px solid #D29922; }
+
     /* Premium Badge */
-    .premium-badge { display: inline-block; background: #1a1a1a; color: #ffffff; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-left: 0.75rem; }
+    .premium-badge { display: inline-block; background: #FFFFFF; color: #0E1117; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; margin-left: 0.75rem; }
     </style>
 """, unsafe_allow_html=True)
 
